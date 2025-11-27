@@ -71,4 +71,8 @@ export class UserService {
       primeiroAcesso: false,
     });
   }
+
+  async getUsersAtivos() {
+    return await this.userModel.find({ ativo: true });
+  }
 }

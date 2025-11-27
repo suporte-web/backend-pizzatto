@@ -33,7 +33,7 @@ export class ToDoService {
   }
 
   async findByFilter(body: any) {
-    let { pesquisa, page, limit } = body;
+    let { pesquisa, page, limit, finalizado, responsavel } = body;
 
     const skip = (page - 1) * limit;
 
@@ -45,6 +45,22 @@ export class ToDoService {
         { descricao: { $regex: pesquisa, $options: 'i' } },
         { responsavel: { $regex: pesquisa, $options: 'i' } },
       ];
+    }
+
+    if (finalizado === true) {
+      // Somente finalizados
+      query['finalizado'] = true;
+    } else if (finalizado === false) {
+      // Finalizados = false OU campo não existe
+      query['$or'] = [
+        ...(query['$or'] || []), // preserva OR da pesquisa se existir
+        { finalizado: false },
+        { finalizado: { $exists: false } },
+      ];
+    }
+
+    if (responsavel) {
+      query['responsavel'] = { $regex: responsavel, $options: 'i' };
     }
 
     const result = await this.toDoModel
