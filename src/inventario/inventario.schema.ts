@@ -12,6 +12,7 @@ export const InventarioSchema = new mongoose.Schema(
     dataEntrega: String,
     status: String,
     descricao: String,
+    maquina: String,
   },
   {
     timestamps: true,

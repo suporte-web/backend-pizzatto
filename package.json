@@ -36,6 +36,7 @@
     "jsonwebtoken": "^9.0.2",
     "libreoffice-convert": "^1.7.0",
     "mammoth": "^1.11.0",
+    "moment": "^2.30.1",
     "mongoose": "^8.19.2",
     "puppeteer": "^24.26.1",
     "reflect-metadata": "^0.2.2",

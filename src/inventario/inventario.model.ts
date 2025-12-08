@@ -11,6 +11,7 @@ export interface Inventario extends Document {
   dataEntrega: string;
   status: string;
   descricao: string;
+  maquina: string;
   createdAt: Date;
   updatedAt: Date;
 }

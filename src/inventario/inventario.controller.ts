@@ -1,4 +1,11 @@
-import { Body, Controller, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InventarioService } from './inventario.service';
 import { AuthGuard } from 'src/auth/auth.guard';
@@ -31,5 +38,13 @@ export class InventarioController {
   @ApiOperation({ summary: 'Atualiza o item no Inventário' })
   async update(@Body() body: any) {
     return await this.inventarioService.update(body);
+  }
+
+  @Post('create-pdf-termo/:id')
+  @ApiOperation({
+    summary: 'Cria o termo de compromisso do equipamento através do Inventario',
+  })
+  async createPdfTermo(@Param('id') id: any) {
+    return await this.inventarioService.createPdfTermo(id);
   }
 }
