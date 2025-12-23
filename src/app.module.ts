@@ -10,6 +10,8 @@ import { InventarioModule } from './inventario/inventario.module';
 import { InventarioImpressoraModule } from './inventarioImpressoras/inventarioImpressoras.module';
 import { ContasOfficeModule } from './contasOffice/contasOffice.module';
 import { ToDoModule } from './to-do/to-do.module';
+import { GlpiModule } from './glpi/glpi.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -24,6 +26,10 @@ import { ToDoModule } from './to-do/to-do.module';
     ),
     ContasOfficeModule,
     ToDoModule,
+    GlpiModule,
+    ConfigModule.forRoot({
+      isGlobal: true, // importantíssimo
+    }),
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -335,9 +335,6 @@ export class InventarioService {
             <div class="subtitle">Uso exclusivo para atividades profissionais</div>
 
             <div class="meta">
-              <div>
-                <span><strong>Colaborador:</strong> ${inventario?.nomeColaborador || ''}</span>
-              </div>
               <div class="footer-date">
                 Curitiba/PR, ${moment().format('DD/MM/YYYY')}
               </div>
@@ -347,7 +344,7 @@ export class InventarioService {
               <div class="equipment-title">Dados do Equipamento</div>
               <div class="equipment-row">
                 <span class="equipment-label">Equipamento:</span>
-                <span> ${inventario?.maquina || ''}</span>
+                <span> ${inventario?.equipamento || ''}</span>
               </div>
               <div class="equipment-row">
                 <span class="equipment-label">Nome do computador:</span>
