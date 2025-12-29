@@ -526,17 +526,17 @@ export class GlpiService {
                   : ``
               }
               ${
-                body.carregadorCelularActive
+                body.chipCelularActive
                   ? `
                 <div class="equipment-row">
                 <span class="equipment-label">Chip:</span>
-                <span>${body.chip}</span>
+                <span>${body.chipCelular}</span>
                 </div>
                 `
                   : ``
               }
               ${
-                body.chipCelularActive
+                body.carregadorCelularActive
                   ? `
                 <div class="equipment-row">
                 <span class="equipment-label">Acompanha Carregador de Celular:</span>
