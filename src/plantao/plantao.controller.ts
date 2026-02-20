@@ -16,7 +16,7 @@ export class PlantaoController {
   }
 
 
-  @Put("config")
+  @Put("update-config")
   saveConfig(@Body() body: Omit<PlantaoConfigDTO, "configId">) {
     return this.service.saveConfig(body);
   }
