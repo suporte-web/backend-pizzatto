@@ -148,20 +148,28 @@ export class PlantaoService {
       // substitui contatos dessa config
       await conn.query(`DELETE FROM plantao_contato WHERE config_id = ?`, [configId]);
 
+      const UUID_RE =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
       if (payload.contatos?.length) {
-        const values = payload.contatos.map((c) => [
-          (c.id && c.id.trim() !== "" ? c.id : randomUUID()),
-          configId,
-          c.nome || "",
-          c.telefone || "",
-          (c.area === "Infra" ? "Infra" : "Sistemas"),
-        ]);
+        const values = payload.contatos.map((c) => {
+          const id = c.id?.trim();
+          const contatoId = id && UUID_RE.test(id) ? id.toLowerCase() : randomUUID();
+
+          return [
+            contatoId,
+            configId,
+            c.nome || "",
+            c.telefone || "",
+            c.area === "Infra" ? "Infra" : "Sistemas",
+          ];
+        });
 
         const placeholders = values.map(() => `(?, ?, ?, ?, ?)`).join(", ");
 
         await conn.query(
           `INSERT INTO plantao_contato (id, config_id, nome, telefone, area)
-          VALUES ${placeholders}`,
+     VALUES ${placeholders}`,
           values.flat(),
         );
       }
