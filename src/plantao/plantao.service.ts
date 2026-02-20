@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException } from "@nestjs/common";
 import { mariaPool } from "./db";
+import { randomUUID } from "crypto";
 
 type Area = "Sistemas" | "Infra";
 
@@ -149,29 +150,29 @@ export class PlantaoService {
 
       if (payload.contatos?.length) {
         const values = payload.contatos.map((c) => [
-          c.id && c.id.trim() !== "" ? c.id : null,
+          (c.id && c.id.trim() !== "" ? c.id : randomUUID()),
           configId,
           c.nome || "",
           c.telefone || "",
           (c.area === "Infra" ? "Infra" : "Sistemas"),
         ]);
 
-        const placeholders = values.map(() => `(COALESCE(?, UUID()), ?, ?, ?, ?)`).join(", ");
+        const placeholders = values.map(() => `(?, ?, ?, ?, ?)`).join(", ");
 
         await conn.query(
           `INSERT INTO plantao_contato (id, config_id, nome, telefone, area)
-           VALUES ${placeholders}`,
+          VALUES ${placeholders}`,
           values.flat(),
         );
       }
 
       await conn.commit();
       return { ok: true };
-      } catch (e) {
-        console.error("[PLANTAO] saveConfig error:", e);
-        await conn.rollback();
-        throw new InternalServerErrorException("Erro ao salvar config do Plantão");
-      }
+    } catch (e) {
+      console.error("[PLANTAO] saveConfig error:", e);
+      await conn.rollback();
+      throw new InternalServerErrorException("Erro ao salvar config do Plantão");
     }
   }
+}
 
