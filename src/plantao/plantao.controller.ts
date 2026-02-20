@@ -17,7 +17,11 @@ export class PlantaoController {
 
 
   @Put("update-config")
-  saveConfig(@Body() body: Omit<PlantaoConfigDTO, "configId">) {
+  saveConfig(@Body() body: any) {
+    console.log("[PLANTAO] HIT update-config", {
+      contatos: body?.contatos?.length,
+      configId: body?.configId,
+    });
     return this.service.saveConfig(body);
-  }
+}
 }

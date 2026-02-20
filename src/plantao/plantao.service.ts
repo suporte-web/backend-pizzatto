@@ -149,11 +149,11 @@ export class PlantaoService {
 
       if (payload.contatos?.length) {
         const values = payload.contatos.map((c) => [
-          c.id || null, // se vier null -> UUID()
+          c.id && c.id.trim() !== "" ? c.id : null,
           configId,
           c.nome || "",
           c.telefone || "",
-          c.area || "Sistemas",
+          (c.area === "Infra" ? "Infra" : "Sistemas"),
         ]);
 
         const placeholders = values.map(() => `(COALESCE(?, UUID()), ?, ?, ?, ?)`).join(", ");
@@ -167,11 +167,11 @@ export class PlantaoService {
 
       await conn.commit();
       return { ok: true };
-    } catch {
-      await conn.rollback();
-      throw new InternalServerErrorException("Erro ao salvar config do Plantão");
-    } finally {
-      conn.release();
+      } catch (e) {
+        console.error("[PLANTAO] saveConfig error:", e);
+        await conn.rollback();
+        throw new InternalServerErrorException("Erro ao salvar config do Plantão");
+      }
     }
   }
-}
+
