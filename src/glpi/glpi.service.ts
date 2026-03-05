@@ -457,7 +457,7 @@ export class GlpiService {
                   ? `
                 <div class="equipment-row">
                 <span class="equipment-label">Mouse:</span>
-                <span>Mouse Dell Pro - KM5221W</span>
+                <span>${body.mouse}</span>
                 </div>
                 `
                   : ``
@@ -467,7 +467,7 @@ export class GlpiService {
                   ? `
                 <div class="equipment-row">
                 <span class="equipment-label">Teclado:</span>
-                <span>Teclado Dell Pro - KM5221W</span>
+                <span>${body.teclado}</span>
                 </div>
                 `
                   : ``
@@ -491,7 +491,7 @@ export class GlpiService {
                 </div>
                 `
                   : `
-                  s="equipment-row">
+                <div s="equipment-row">
                 <span class="equipment-label">Acompanha Suporte de Notebook:</span>
                 <span>NÃO</span>
                 </div>`
