@@ -389,7 +389,14 @@ export class GlpiService {
         </head>
         <body>
           <div class="container">
-            
+            <div class="header">
+              ${logoHtml ? `<div class="logo-wrapper">${logoHtml}</div>` : ''}
+              <div class="company-info">
+                <div class="company-name">TRANS PIZZATTO TRANSPORTADORA DE CARGAS RODOV. LTDA</div>
+                <div>CNPJ: 77.058.881/0001-26</div>
+                <div>Curitiba - PR</div>
+              </div>
+            </div>
 
             <div class="title">Termo de Responsabilidade de Equipamento</div>
             <div class="subtitle">Uso exclusivo para atividades profissionais</div>
@@ -407,19 +414,19 @@ export class GlpiService {
               <div class="equipment-title">Dados do Notebook</div>
               <div class="equipment-row">
               <span class="equipment-label">Equipamento:</span>
-              <span> NPL-129</span>
+              <span> ${inventario?.equipamento || ''}</span>
               </div>
               <div class="equipment-row">
                 <span class="equipment-label">Nome do computador:</span>
-                <span>Vostro 15 3510</span>
+                <span> ${inventario?.nomeComputador || ''}</span>
                 </div>
               <div class="equipment-row">
                 <span class="equipment-label">Produzido por:</span>
-                <span>Dell Inc.</span>
+                <span> ${inventario?.produzidoPor || ''}</span>
                 </div>
               <div class="equipment-row">
                 <span class="equipment-label">TAG / Patrimônio:</span>
-                <span>H1SY9V3</span>
+                <span> ${inventario?.tag || ''}</span>
                 </div>
                 </div>
                 `
@@ -550,7 +557,7 @@ export class GlpiService {
                 <p class="block">
                 Eu, <strong>${inventario?.nomeColaborador || '________________________________'}</strong>, 
                 CPF <strong>_______________________________</strong>, declaro para os devidos fins que recebi da
-              empresa <strong>AVANTTE SEMINOVOS</strong> o equipamento acima descrito,
+              empresa <strong>TRANS PIZZATTO TRANSPORTADORA DE CARGAS RODOV. LTDA</strong> o equipamento acima descrito,
               de uso exclusivo para assuntos relacionados ao meu contrato de trabalho.
             </p>
 
@@ -588,7 +595,7 @@ export class GlpiService {
 
                 <div class="signature-block">
                   <div class="signature-line"></div>
-                  <div class="signature-name">AVANTTE SEMINOVOS</div>
+                  <div class="signature-name">TRANS PIZZATTO TRANSPORTADORA DE CARGAS RODOV. LTDA</div>
                   <div class="signature-role">Representante da Empresa</div>
                 </div>
               </div>
