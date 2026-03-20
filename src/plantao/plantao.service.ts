@@ -1,6 +1,5 @@
 import { Injectable, InternalServerErrorException } from "@nestjs/common";
-import { mariaPool } from "./db";
-import { randomUUID } from "crypto";
+import { PrismaService } from "../prisma/prisma.service";
 
 type Area = "Sistemas" | "Infra";
 
@@ -35,28 +34,24 @@ const escalaVazia = (): EscalaSemanal => ({
 
 @Injectable()
 export class PlantaoService {
-  private async ensureConfig(): Promise<any> {
-    const [rows] = await mariaPool.query<any[]>(
-      `SELECT * FROM plantao_config ORDER BY created_at ASC LIMIT 1`,
-    );
+  constructor(private readonly prisma: PrismaService) {}
 
-    let config = rows?.[0];
+  private async ensureConfig() {
+    let config = await this.prisma.plantaoConfig.findFirst({
+      orderBy: { createdAt: "asc" },
+    });
 
     if (!config) {
-      await mariaPool.query(
-        `INSERT INTO plantao_config
-         (id, janela_sis_inicio, janela_sis_fim, janela_inf_inicio, janela_inf_fim, escala_sistemas, escala_infra)
-         VALUES
-         (UUID(), '08:00','18:00','08:00','18:00',
-          JSON_OBJECT('segunda','', 'terca','', 'quarta','', 'quinta','', 'sexta','', 'sabado','', 'domingo',''),
-          JSON_OBJECT('segunda','', 'terca','', 'quarta','', 'quinta','', 'sexta','', 'sabado','', 'domingo','')
-         )`,
-      );
-
-      const [rows2] = await mariaPool.query<any[]>(
-        `SELECT * FROM plantao_config ORDER BY created_at ASC LIMIT 1`,
-      );
-      config = rows2?.[0];
+      config = await this.prisma.plantaoConfig.create({
+        data: {
+          janelaSisInicio: "08:00",
+          janelaSisFim: "18:00",
+          janelaInfInicio: "08:00",
+          janelaInfFim: "18:00",
+          escalaSistemas: escalaVazia(),
+          escalaInfra: escalaVazia(),
+        },
+      });
     }
 
     return config;
@@ -66,121 +61,97 @@ export class PlantaoService {
     try {
       const config = await this.ensureConfig();
 
-      const [contatos] = await mariaPool.query<any[]>(
-        `SELECT id, nome, telefone, area
-         FROM plantao_contato
-         WHERE config_id = ?
-         ORDER BY created_at ASC`,
-        [config.id],
-      );
-
-      const escalaSistemas =
-        typeof config.escala_sistemas === "string"
-          ? JSON.parse(config.escala_sistemas)
-          : config.escala_sistemas;
-
-      const escalaInfra =
-        typeof config.escala_infra === "string"
-          ? JSON.parse(config.escala_infra)
-          : config.escala_infra;
+      const contatos = await this.prisma.plantaoContato.findMany({
+        where: { configId: config.id },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          nome: true,
+          telefone: true,
+          area: true,
+        },
+      });
 
       return {
-        configId: String(config.id),
-        janelaSistemas: { inicio: config.janela_sis_inicio, fim: config.janela_sis_fim },
-        janelaInfra: { inicio: config.janela_inf_inicio, fim: config.janela_inf_fim },
-        escalaSistemas: escalaSistemas ?? escalaVazia(),
-        escalaInfra: escalaInfra ?? escalaVazia(),
-        contatos: (contatos ?? []) as any,
+        configId: config.id,
+        janelaSistemas: {
+          inicio: config.janelaSisInicio,
+          fim: config.janelaSisFim,
+        },
+        janelaInfra: {
+          inicio: config.janelaInfInicio,
+          fim: config.janelaInfFim,
+        },
+        escalaSistemas: (config.escalaSistemas as EscalaSemanal) ?? escalaVazia(),
+        escalaInfra: (config.escalaInfra as EscalaSemanal) ?? escalaVazia(),
+        contatos: contatos as Array<{
+          id: string;
+          nome: string;
+          telefone: string;
+          area: Area;
+        }>,
       };
-    } catch {
+    } catch (e) {
+      console.error("[PLANTAO] getConfig error:", e);
       throw new InternalServerErrorException("Erro ao buscar config do Plantão");
     }
   }
 
   async saveConfig(payload: Omit<PlantaoConfigDTO, "configId">): Promise<{ ok: true }> {
-    const conn = await mariaPool.getConnection();
     try {
-      await conn.beginTransaction();
-
-      // garante config existente e pega o id UUID
-      const [rows] = await conn.query<any[]>(
-        `SELECT * FROM plantao_config ORDER BY created_at ASC LIMIT 1`,
-      );
-      let config = rows?.[0];
-
-      if (!config) {
-        await conn.query(
-          `INSERT INTO plantao_config
-           (id, janela_sis_inicio, janela_sis_fim, janela_inf_inicio, janela_inf_fim, escala_sistemas, escala_infra)
-           VALUES
-           (UUID(), '08:00','18:00','08:00','18:00',
-            JSON_OBJECT('segunda','', 'terca','', 'quarta','', 'quinta','', 'sexta','', 'sabado','', 'domingo',''),
-            JSON_OBJECT('segunda','', 'terca','', 'quarta','', 'quinta','', 'sexta','', 'sabado','', 'domingo','')
-           )`,
-        );
-
-        const [rows2] = await conn.query<any[]>(
-          `SELECT * FROM plantao_config ORDER BY created_at ASC LIMIT 1`,
-        );
-        config = rows2?.[0];
-      }
-
-      const configId = config.id;
-
-      // atualiza a config existente (UUID)
-      await conn.query(
-        `UPDATE plantao_config
-         SET janela_sis_inicio=?, janela_sis_fim=?,
-             janela_inf_inicio=?, janela_inf_fim=?,
-             escala_sistemas=?, escala_infra=?
-         WHERE id=?`,
-        [
-          payload.janelaSistemas?.inicio ?? "08:00",
-          payload.janelaSistemas?.fim ?? "18:00",
-          payload.janelaInfra?.inicio ?? "08:00",
-          payload.janelaInfra?.fim ?? "18:00",
-          JSON.stringify(payload.escalaSistemas ?? escalaVazia()),
-          JSON.stringify(payload.escalaInfra ?? escalaVazia()),
-          configId,
-        ],
-      );
-
-      // substitui contatos dessa config
-      await conn.query(`DELETE FROM plantao_contato WHERE config_id = ?`, [configId]);
-
-      const UUID_RE =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-      if (payload.contatos?.length) {
-        const values = payload.contatos.map((c) => {
-          const id = c.id?.trim();
-          const contatoId = id && UUID_RE.test(id) ? id.toLowerCase() : randomUUID();
-
-          return [
-            contatoId,
-            configId,
-            c.nome || "",
-            c.telefone || "",
-            c.area === "Infra" ? "Infra" : "Sistemas",
-          ];
+      await this.prisma.$transaction(async (tx) => {
+        let config = await tx.plantaoConfig.findFirst({
+          orderBy: { createdAt: "asc" },
         });
 
-        const placeholders = values.map(() => `(?, ?, ?, ?, ?)`).join(", ");
+        if (!config) {
+          config = await tx.plantaoConfig.create({
+            data: {
+              janelaSisInicio: "08:00",
+              janelaSisFim: "18:00",
+              janelaInfInicio: "08:00",
+              janelaInfFim: "18:00",
+              escalaSistemas: escalaVazia(),
+              escalaInfra: escalaVazia(),
+            },
+          });
+        }
 
-        await conn.query(
-          `INSERT INTO plantao_contato (id, config_id, nome, telefone, area)
-     VALUES ${placeholders}`,
-          values.flat(),
-        );
-      }
+        const configId = config.id;
 
-      await conn.commit();
+        await tx.plantaoConfig.update({
+          where: { id: configId },
+          data: {
+            janelaSisInicio: payload.janelaSistemas?.inicio ?? "08:00",
+            janelaSisFim: payload.janelaSistemas?.fim ?? "18:00",
+            janelaInfInicio: payload.janelaInfra?.inicio ?? "08:00",
+            janelaInfFim: payload.janelaInfra?.fim ?? "18:00",
+            escalaSistemas: payload.escalaSistemas ?? escalaVazia(),
+            escalaInfra: payload.escalaInfra ?? escalaVazia(),
+          },
+        });
+
+        await tx.plantaoContato.deleteMany({
+          where: { configId },
+        });
+
+        if (payload.contatos?.length) {
+          await tx.plantaoContato.createMany({
+            data: payload.contatos.map((c) => ({
+              id: c.id?.trim() || crypto.randomUUID(),
+              configId,
+              nome: c.nome || "",
+              telefone: c.telefone || "",
+              area: c.area === "Infra" ? "Infra" : "Sistemas",
+            })),
+          });
+        }
+      });
+
       return { ok: true };
     } catch (e) {
       console.error("[PLANTAO] saveConfig error:", e);
-      await conn.rollback();
       throw new InternalServerErrorException("Erro ao salvar config do Plantão");
     }
   }
 }
-

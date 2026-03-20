@@ -91,3 +91,32 @@ model audit_logs {
   filialEntidade String?
   createdAt      DateTime @default(now())
 }
+
+model PlantaoConfig {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  janelaSisInicio String
+  janelaSisFim    String
+  janelaInfInicio String
+  janelaInfFim    String
+  escalaSistemas  Json
+  escalaInfra     Json
+  createdAt       DateTime         @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime         @default(now()) @db.Timestamp(6)
+  PlantaoContato  PlantaoContato[]
+}
+
+model PlantaoContato {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome          String
+  telefone      String
+  area          Area
+  createdAt     DateTime      @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime      @default(now()) @db.Timestamp(6)
+  configId      String        @db.Uuid
+  PlantaoConfig PlantaoConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+}
+
+enum Area {
+  Sistemas
+  Infra
+}
