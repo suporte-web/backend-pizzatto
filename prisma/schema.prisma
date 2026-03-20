@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Assinatura {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome          String
+  cargo         String
+  telefone      String?
+  email         String
+  criadoPor     String
+  caminhoImagem String?
+  createdAt     DateTime @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime @default(now()) @db.Timestamp(6)
+  status        String?  @default("AGUARDANDO APROVAÇÃO")
+  motivo        String?
+}
+
+model ContasOffice {
+  id    String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome  String
+  email String
+  senha String
+  ativo Boolean @default(false)
+}
+
+model InventarioImpressoras {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  filial             String
+  marca              String
+  modelo             String
+  numeroSerie        String?
+  ip                 String
+  macLan             String
+  macWlan            String?
+  localizacao        String?
+  senhaAdministrador String?
+  etiqueta           String?
+  createdAt          DateTime @default(now()) @db.Timestamp(6)
+  updatedAt          DateTime @default(now()) @db.Timestamp(6)
+}
+
+model Mural {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo        String
+  mensagem      String
+  caminhoImagem String?
+  filiais       String[]
+  createdAt     DateTime @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime @default(now()) @db.Timestamp(6)
+  ativo         Boolean  @default(true)
+  validoAte     String
+  criadoPor     String
+  importante    Boolean  @default(false)
+}
+
+model Pops {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  filename     String
+  originalName String
+  mimetype     String
+  size         String
+  filePath     String
+  folder       String
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime @default(now()) @db.Timestamp(6)
+}
+
+model ToDo {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome           String
+  descricao      String
+  prazoLimite    String?
+  responsavel    String
+  finalizado     Boolean  @default(false)
+  dataFinalizado String?
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime @default(now()) @db.Timestamp(6)
+}
+
+model audit_logs {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acao           String
+  entidade       String
+  ipAddress      String?
+  filialEntidade String?
+  createdAt      DateTime @default(now())
+}

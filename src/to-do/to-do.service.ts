@@ -1,75 +1,124 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Model } from 'mongoose';
-import { ToDo } from './to-do.model';
-import { InjectModel } from '@nestjs/mongoose';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class ToDoService {
-  constructor(@InjectModel('ToDo') private readonly toDoModel: Model<ToDo>) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(body: any) {
-    const find = await this.toDoModel.findOne({ nome: body.nome });
+    const find = await this.prisma.toDo.findFirst({
+      where: {
+        nome: body.nome,
+      },
+    });
 
     if (find) {
       throw new BadRequestException('Item a Fazer ja existe na Lista!');
     }
-    return await this.toDoModel.create(body);
+
+    return await this.prisma.toDo.create({
+      data: body,
+    });
   }
 
   async findAll() {
-    return await this.toDoModel.find();
+    return await this.prisma.toDo.findMany({
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
   }
 
   async findOne(id: string) {
-    return await this.toDoModel.findById(id);
+    return await this.prisma.toDo.findUnique({
+      where: {
+        id,
+      },
+    });
   }
 
   async update(id: string, body: any) {
-    return await this.toDoModel.findByIdAndUpdate(id, body);
+    return await this.prisma.toDo.update({
+      where: {
+        id,
+      },
+      data: body,
+    });
   }
 
   async delete(id: string) {
-    return await this.toDoModel.findByIdAndDelete(id);
+    return await this.prisma.toDo.delete({
+      where: {
+        id,
+      },
+    });
   }
 
   async findByFilter(body: any) {
-    let { pesquisa, page, limit, finalizado, responsavel } = body;
+    const {
+      pesquisa,
+      page = 1,
+      limit = 10,
+      finalizado,
+      responsavel,
+    } = body;
 
     const skip = (page - 1) * limit;
 
-    let query = {};
+    const where: any = {
+      AND: [],
+    };
 
     if (pesquisa) {
-      query['$or'] = [
-        { nome: { $regex: pesquisa, $options: 'i' } },
-        { descricao: { $regex: pesquisa, $options: 'i' } },
-        { responsavel: { $regex: pesquisa, $options: 'i' } },
-      ];
+      where.AND.push({
+        OR: [
+          { nome: { contains: pesquisa, mode: 'insensitive' } },
+          { descricao: { contains: pesquisa, mode: 'insensitive' } },
+          { responsavel: { contains: pesquisa, mode: 'insensitive' } },
+        ],
+      });
     }
 
     if (finalizado === true) {
-      // Somente finalizados
-      query['finalizado'] = true;
+      where.AND.push({
+        finalizado: true,
+      });
     } else if (finalizado === false) {
-      // Finalizados = false OU campo não existe
-      query['$or'] = [
-        ...(query['$or'] || []), // preserva OR da pesquisa se existir
-        { finalizado: false },
-        { finalizado: { $exists: false } },
-      ];
+      where.AND.push({
+        OR: [
+          { finalizado: false },
+          { finalizado: null },
+        ],
+      });
     }
 
     if (responsavel) {
-      query['responsavel'] = { $regex: responsavel, $options: 'i' };
+      where.AND.push({
+        responsavel: {
+          contains: responsavel,
+          mode: 'insensitive',
+        },
+      });
     }
 
-    const result = await this.toDoModel
-      .find(query)
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: 1 })
-      .exec();
-    const total = await this.toDoModel.countDocuments(query);
+    if (where.AND.length === 0) {
+      delete where.AND;
+    }
+
+    const [result, total] = await Promise.all([
+      this.prisma.toDo.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'asc',
+        },
+      }),
+      this.prisma.toDo.count({
+        where,
+      }),
+    ]);
+
     return { result, total };
   }
 }

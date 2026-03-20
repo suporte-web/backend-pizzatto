@@ -1,38 +1,66 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Pop } from './pops.model';
-import { Model } from 'mongoose';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class PopService {
-  constructor(@InjectModel('Pop') private readonly popModel: Model<Pop>) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(body: any) {
-    const find = await this.popModel.findOne({
-      originalName: body.originalName,
+    const find = await this.prisma.pops.findFirst({
+      where: {
+        originalName: body.originalName,
+      },
     });
+
     if (find) {
-      return await this.popModel.findByIdAndUpdate(find._id, body);
-    } else {
-      return await this.popModel.create(body);
+      return await this.prisma.pops.update({
+        where: {
+          id: find.id,
+        },
+        data: body,
+      });
     }
+
+    return await this.prisma.pops.create({
+      data: body,
+    });
   }
 
-  async findById(id: any) {
-    return await this.popModel.findById(id);
+  async findById(id: string) {
+    return await this.prisma.pops.findUnique({
+      where: {
+        id,
+      },
+    });
   }
 
   async findByFilter(body: any) {
-    let { nome, page, limit } = body;
+    const { nome, page = 1, limit = 10 } = body;
 
     const skip = (page - 1) * limit;
 
-    let query = {};
+    const where: any = {};
 
-    if (nome) query['originalName'] = { $regex: nome, $options: 'i' };
+    if (nome) {
+      where.originalName = {
+        contains: nome,
+        mode: 'insensitive',
+      };
+    }
 
-    const result = await this.popModel.find(query).skip(skip).limit(limit);
-    const total = await this.popModel.countDocuments(query);
+    const [result, total] = await Promise.all([
+      this.prisma.pops.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          originalName: 'asc',
+        },
+      }),
+      this.prisma.pops.count({
+        where,
+      }),
+    ]);
 
     return { result, total };
   }

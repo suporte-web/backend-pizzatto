@@ -1,38 +1,34 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from './auth.guard';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dtos/login.dto';
-import { User } from 'src/decorator/user.decorator';
+import { User } from '../decorator/user.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  constructor(private readonly auth: AuthService) {}
 
-    constructor(private readonly authService: AuthService) { }
+//   @Post('login')
+//   login(@Body() body: { username: string; password: string }) {
+//     return this.auth.login(body);
+//   }
 
-    @Post('login')
-    @ApiOperation({ summary: 'Realiza o login' })
-    async login(@Body() data: LoginDto) {
-        return await this.authService.login(data);
-    }
+//   @UseGuards(AuthGuard)
+//   @Post('logout')
+//   logout(@Req() req: any) {
+//     return this.auth.logout(req.user.sub);
+//   }
 
-    @Post('logout')
-    @ApiOperation({ summary: 'Realiza o logout' })
-    async logout() {
-        return await this.authService.logout();
-    }
+  // @Post('refresh')
+  // refresh(@Body() body: { userId: string; refreshToken: string }) {
+  //   return this.auth.refresh(body.userId, body.refreshToken);
+  // }
 
-    // @Post('verify')
-    // @ApiOperation({ summary: 'Verifica o código de verificação' })
-    // async verify(@Body() data) {
-    //     return await this.authService.verifyCode(data.email, data.code);
-    // }
-
-    @Get('me')
-    @ApiOperation({ summary: 'Retorna o usuário logado' })
-    @UseGuards(AuthGuard)
-    async me(@User() user) {
-        return user
-    }
+  @Get('me')
+  @ApiOperation({ summary: 'Retorna o usuário logado' })
+  @UseGuards(AuthGuard)
+  async me(@User() user) {
+    return user;
+  }
 }

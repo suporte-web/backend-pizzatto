@@ -1,18 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ContasOfficeService } from './contasOffice.service';
 import { ContasOfficeController } from './contasOffice.controller';
-import { MongooseModule } from '@nestjs/mongoose';
-import { ContasOfficeSchema } from './contasOffice.schema';
 import { AuthModule } from 'src/auth/auth.module';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: 'ContasOffice', schema: ContasOfficeSchema },
-    ]),
-    AuthModule,
-  ],
+  imports: [AuthModule],
   controllers: [ContasOfficeController],
-  providers: [ContasOfficeService],
+  providers: [ContasOfficeService, PrismaService],
 })
 export class ContasOfficeModule {}

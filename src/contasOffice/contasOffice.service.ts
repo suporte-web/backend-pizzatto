@@ -1,38 +1,52 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { ContasOffice } from './contasOffice.model';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContaOfficeDto } from './dtos/CreateContaOffice.dto';
+
+type FindByFilterDto = {
+  pesquisa?: string;
+  page?: number;
+  limit?: number;
+};
 
 @Injectable()
 export class ContasOfficeService {
-  constructor(
-    @InjectModel('ContasOffice')
-    private readonly contasOfficeModel: Model<ContasOffice>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(body: any) {
-    const find = await this.contasOfficeModel.findOne({ email: body.email });
+  async create(body: CreateContaOfficeDto) {
+    const email = body.Email?.trim().toLowerCase();
+    const nome = body.Nome?.trim();
+    const senha = body.Senha?.trim();
 
-    if (find) {
-      throw new BadRequestException('Conta ja cadastrada');
+    if (!email || !nome || !senha) {
+      throw new BadRequestException('Nome, email e senha são obrigatórios');
     }
 
-    return await this.contasOfficeModel.create({ ...body, ativo: true });
+    const existing = await this.prisma.contasOffice.findFirst({
+      where: { email },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Conta já cadastrada');
+    }
+
+    return this.prisma.contasOffice.create({
+      data: {
+        nome,
+        email,
+        senha,
+        ativo: true,
+      },
+    });
   }
 
   async createBySpreadsheet(
     body: CreateContaOfficeDto[] | CreateContaOfficeDto,
   ) {
     if (Array.isArray(body)) {
-      // Processar múltiplos registros
-      return await Promise.all(
-        body.map((item) => this.createOrUpdateRecord(item)),
-      );
-    } else {
-      // Processar único registro
-      return await this.createOrUpdateRecord(body);
+      return Promise.all(body.map((item) => this.createOrUpdateRecord(item)));
     }
+
+    return this.createOrUpdateRecord(body);
   }
 
   private async createOrUpdateRecord(data: CreateContaOfficeDto) {
@@ -40,74 +54,150 @@ export class ContasOfficeService {
       throw new BadRequestException('Dados inválidos');
     }
 
-    const { Nome: nome, Email: email, Senha: senha } = data;
+    const nome = data.Nome?.trim();
+    const email = data.Email?.trim().toLowerCase();
+    const senha = data.Senha?.trim();
 
-    // Verificar se existe algum registro com o mesmo nomeComputador OU nomeColaborador
-    const existingRecord = await this.contasOfficeModel.findOne({ nome: nome });
+    if (!nome || !email || !senha) {
+      throw new BadRequestException('Nome, email e senha são obrigatórios');
+    }
+
+    const existingRecord = await this.prisma.contasOffice.findFirst({
+      where: { nome },
+    });
 
     if (existingRecord) {
-      // Atualizar registro existente
-      return await this.contasOfficeModel.findByIdAndUpdate(
-        existingRecord._id,
-        {
-          nome: nome,
-          email: email,
-          senha: senha,
+      return this.prisma.contasOffice.update({
+        where: { id: existingRecord.id },
+        data: {
+          nome,
+          email,
+          senha,
         },
-        { new: true },
-      );
-    } else {
-      // Criar novo registro
-      return await this.contasOfficeModel.create({
-        nome: nome,
-        email: email,
-        senha: senha,
-        ativo: true,
       });
     }
+
+    return this.prisma.contasOffice.create({
+      data: {
+        nome,
+        email,
+        senha,
+        ativo: true,
+      },
+    });
   }
 
   async findAtivos() {
-    return await this.contasOfficeModel.find({ ativo: true });
+    return this.prisma.contasOffice.findMany({
+      where: { ativo: true },
+      orderBy: { nome: 'asc' },
+    });
   }
 
   async findAll() {
-    return await this.contasOfficeModel.find();
+    return this.prisma.contasOffice.findMany({
+      orderBy: { nome: 'asc' },
+    });
   }
 
   async findOne(id: string) {
-    return await this.contasOfficeModel.findById(id);
+    const conta = await this.prisma.contasOffice.findUnique({
+      where: { id },
+    });
+
+    if (!conta) {
+      throw new BadRequestException('Conta não encontrada');
+    }
+
+    return conta;
   }
 
-  async findByFilter(body: any) {
-    let { pesquisa, page, limit } = body;
+  async findByFilter(body: FindByFilterDto) {
+    const pesquisa = body?.pesquisa?.trim();
+    const page = Number(body?.page) > 0 ? Number(body.page) : 1;
+    const limit = Number(body?.limit) > 0 ? Number(body.limit) : 10;
 
     const skip = (page - 1) * limit;
 
-    let query = {};
+    const where = pesquisa
+      ? {
+          OR: [
+            {
+              nome: {
+                contains: pesquisa,
+                mode: 'insensitive' as const,
+              },
+            },
+            {
+              email: {
+                contains: pesquisa,
+                mode: 'insensitive' as const,
+              },
+            },
+          ],
+        }
+      : {};
 
-    if (pesquisa) {
-      query['$or'] = [
-        { nome: { $regex: pesquisa, $options: 'i' } },
-        { email: { $regex: pesquisa, $options: 'i' } },
-      ];
-    }
+    const [result, total] = await Promise.all([
+      this.prisma.contasOffice.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { nome: 'asc' },
+      }),
+      this.prisma.contasOffice.count({ where }),
+    ]);
 
-    const result = await this.contasOfficeModel
-      .find(query)
-      .skip(skip)
-      .limit(limit)
-      .sort({ nomeComputador: 1 })
-      .exec();
-    const total = await this.contasOfficeModel.countDocuments(query);
-    return { result, total };
+    return {
+      result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
-  async update(id: string, body: any) {
-    return this.contasOfficeModel.findByIdAndUpdate(id, body);
+  async update(
+    id: string,
+    body: Partial<{
+      nome: string;
+      email: string;
+      senha: string;
+      ativo: boolean;
+    }>,
+  ) {
+    const existing = await this.prisma.contasOffice.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Conta não encontrada');
+    }
+
+    return this.prisma.contasOffice.update({
+      where: { id },
+      data: {
+        ...(body.nome !== undefined && { nome: body.nome.trim() }),
+        ...(body.email !== undefined && {
+          email: body.email.trim().toLowerCase(),
+        }),
+        ...(body.senha !== undefined && { senha: body.senha.trim() }),
+        ...(body.ativo !== undefined && { ativo: body.ativo }),
+      },
+    });
   }
 
   async delete(id: string) {
-    return this.contasOfficeModel.findByIdAndDelete(id);
+    const existing = await this.prisma.contasOffice.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Conta não encontrada');
+    }
+
+    return this.prisma.contasOffice.delete({
+      where: { id },
+    });
   }
 }

@@ -1,19 +1,13 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from 'src/auth/auth.module';
 import { InventarioImpressorasController } from './inventarioImpressoras.controller';
 import { InventarioImpressorasService } from './inventarioImpressoras.service';
-import { InventarioImpressoraSchema } from './inventarioImpressoras.schema';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: 'InventarioImpressora', schema: InventarioImpressoraSchema },
-    ]),
-    AuthModule,
-  ],
+  imports: [AuthModule],
   controllers: [InventarioImpressorasController],
-  providers: [InventarioImpressorasService],
+  providers: [InventarioImpressorasService, PrismaService],
   exports: [InventarioImpressorasService],
 })
 export class InventarioImpressoraModule {}

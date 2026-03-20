@@ -1,38 +1,36 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateInventarioImpressorasDto {
   @ApiProperty({
     example: 'Araraquara',
     description: 'Filial que fica a Impressora',
-    required: false,
   })
   @IsString()
-  Filial?: String;
+  Filial: string;
 
   @ApiProperty({
     example: 'Dell',
     description: 'Marca da Impressora',
-    required: false,
   })
   @IsString()
-  Marca?: String;
+  Marca: string;
 
   @ApiProperty({
     example: 'ABC-1212AS',
     description: 'Modelo da Impressora',
-    required: false,
   })
   @IsString()
-  Modelo?: String;
+  Modelo: string;
 
   @ApiProperty({
     example: 'U12U3213BUB',
     description: 'Número de Série da Impressora',
     required: false,
   })
+  @IsOptional()
   @IsString()
-  'N° Série'?: String;
+  'N° Série'?: string;
 
   @ApiProperty({
     example: '111.112.11.1',
@@ -40,7 +38,7 @@ export class CreateInventarioImpressorasDto {
     required: false,
   })
   @IsString()
-  IP?: String;
+  IP: string;
 
   @ApiProperty({
     example: '10-10-1a-a1-aa-1a',
@@ -48,37 +46,41 @@ export class CreateInventarioImpressorasDto {
     required: false,
   })
   @IsString()
-  'MAC LAN'?: String;
+  'MAC LAN': string;
 
   @ApiProperty({
     example: '10-10-1a-a1-aa-1a',
     description: 'MAC WLAN da Impressora',
     required: false,
   })
+  @IsOptional()
   @IsString()
-  'MAC WLAN'?: String;
+  'MAC WLAN'?: string;
 
   @ApiProperty({
     example: 'Barracão',
     description: 'Local da Impressora',
     required: false,
   })
+  @IsOptional()
   @IsString()
-  Local?: String;
+  Local?: string;
 
   @ApiProperty({
     example: '321',
     description: 'Senha da Impressora',
     required: false,
   })
+  @IsOptional()
   @IsString()
-  'Senha Admin'?: String;
+  'Senha Admin'?: string;
 
   @ApiProperty({
     example: 'Zebra',
     description: 'Etiqueta da Impressora',
     required: false,
   })
+  @IsOptional()
   @IsString()
-  Etiqueta?: String;
+  Etiqueta?: string;
 }
