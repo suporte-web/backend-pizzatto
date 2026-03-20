@@ -76,7 +76,7 @@ export class ToDoService {
           { descricao: { contains: pesquisa, mode: 'insensitive' } },
           { responsavel: { contains: pesquisa, mode: 'insensitive' } },
         ],
-      });
+      }); 
     }
 
     if (finalizado === true) {
