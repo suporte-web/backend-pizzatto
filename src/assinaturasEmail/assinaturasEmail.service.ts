@@ -36,7 +36,7 @@ export class AssinaturasEmailService {
       data: {
         nome: body.nome.trim(),
         email: body.email.trim(),
-        cargo: body.cargo.trim(),
+        departamento: body.departamento.trim(),
         telefone: body.telefone.trim(),
         criadoPor: user.name,
         caminhoImagem,
@@ -82,7 +82,7 @@ export class AssinaturasEmailService {
                     },
                   },
                   {
-                    cargo: {
+                    departamento: {
                       contains: pesquisa,
                       mode: 'insensitive' as const,
                     },

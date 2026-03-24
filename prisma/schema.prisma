@@ -10,7 +10,6 @@ datasource db {
 model Assinatura {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome          String
-  cargo         String
   telefone      String?
   email         String
   criadoPor     String
@@ -19,6 +18,7 @@ model Assinatura {
   updatedAt     DateTime @default(now()) @db.Timestamp(6)
   status        String?  @default("AGUARDANDO APROVAÇÃO")
   motivo        String?
+  departamento  String
 }
 
 model ContasOffice {
@@ -114,6 +114,29 @@ model PlantaoContato {
   updatedAt     DateTime      @default(now()) @db.Timestamp(6)
   configId      String        @db.Uuid
   PlantaoConfig PlantaoConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+}
+
+model AssinaturaPadrao {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caminhoBackground String?
+  corFont           String?
+  criadoPor         String?
+  isAtual           Boolean  @default(true)
+  createdAt         DateTime @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime @default(now()) @db.Timestamp(6)
+  departamentoX     Int?
+  departamentoY     Int?
+  fontSize          String?
+  logoHeight        Int?
+  logoX             Int?
+  logoY             Int?
+  nomeX             Int?
+  nomeY             Int?
+  photoSize         Int?
+  photoX            Int?
+  photoY            Int?
+  telefoneX         Int?
+  telefoneY         Int?
 }
 
 enum Area {

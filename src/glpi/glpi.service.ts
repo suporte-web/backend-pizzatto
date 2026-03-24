@@ -411,7 +411,7 @@ export class GlpiService {
               body.notebookActive
                 ? `
               <div class="equipment-box">
-              <div class="equipment-title">Dados do Notebook</div>
+              <div class="equipment-title">Dados do Equipamento</div>
               <div class="equipment-row">
               <span class="equipment-label">Equipamento:</span>
               <span> ${inventario?.equipamento || ''}</span>

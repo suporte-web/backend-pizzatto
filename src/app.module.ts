@@ -11,6 +11,7 @@ import { GlpiModule } from './glpi/glpi.module';
 import { PlantaoModule } from './plantao/plantao.module.';
 import { PrismaModule } from './prisma/prisma.module';
 import { AssinaturasEmailModule } from './assinaturasEmail/assinaturasEmail.module';
+import { AssinaturaPadraoModule } from './assinaturaPadrao/assinaturaPadrao.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AssinaturasEmailModule } from './assinaturasEmail/assinaturasEmail.modu
     ToDoModule,
     PlantaoModule,
     AssinaturasEmailModule,
+    AssinaturaPadraoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
