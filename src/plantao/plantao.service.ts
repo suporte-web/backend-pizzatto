@@ -1,7 +1,17 @@
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { PlantaoConfigDTO } from './dtos/plantao.dto';
 
-type Area = "Sistemas" | "Infra";
+type Area = 'Sistemas' | 'Infra';
+
+type DiaSemana =
+  | 'segunda'
+  | 'terca'
+  | 'quarta'
+  | 'quinta'
+  | 'sexta'
+  | 'sabado'
+  | 'domingo';
 
 export type EscalaSemanal = {
   segunda: string;
@@ -13,23 +23,14 @@ export type EscalaSemanal = {
   domingo: string;
 };
 
-export type PlantaoConfigDTO = {
-  configId: string;
-  janelaSistemas: { inicio: string; fim: string };
-  janelaInfra: { inicio: string; fim: string };
-  escalaSistemas: EscalaSemanal;
-  escalaInfra: EscalaSemanal;
-  contatos: Array<{ id: string; nome: string; telefone: string; area: Area }>;
-};
-
 const escalaVazia = (): EscalaSemanal => ({
-  segunda: "",
-  terca: "",
-  quarta: "",
-  quinta: "",
-  sexta: "",
-  sabado: "",
-  domingo: "",
+  segunda: '',
+  terca: '',
+  quarta: '',
+  quinta: '',
+  sexta: '',
+  sabado: '',
+  domingo: '',
 });
 
 @Injectable()
@@ -38,16 +39,16 @@ export class PlantaoService {
 
   private async ensureConfig() {
     let config = await this.prisma.plantaoConfig.findFirst({
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     if (!config) {
       config = await this.prisma.plantaoConfig.create({
         data: {
-          janelaSisInicio: "08:00",
-          janelaSisFim: "18:00",
-          janelaInfInicio: "08:00",
-          janelaInfFim: "18:00",
+          janelaSisInicio: '08:00',
+          janelaSisFim: '18:00',
+          janelaInfInicio: '08:00',
+          janelaInfFim: '18:00',
           escalaSistemas: escalaVazia(),
           escalaInfra: escalaVazia(),
         },
@@ -63,7 +64,7 @@ export class PlantaoService {
 
       const contatos = await this.prisma.plantaoContato.findMany({
         where: { configId: config.id },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           nome: true,
@@ -82,7 +83,8 @@ export class PlantaoService {
           inicio: config.janelaInfInicio,
           fim: config.janelaInfFim,
         },
-        escalaSistemas: (config.escalaSistemas as EscalaSemanal) ?? escalaVazia(),
+        escalaSistemas:
+          (config.escalaSistemas as EscalaSemanal) ?? escalaVazia(),
         escalaInfra: (config.escalaInfra as EscalaSemanal) ?? escalaVazia(),
         contatos: contatos as Array<{
           id: string;
@@ -92,66 +94,183 @@ export class PlantaoService {
         }>,
       };
     } catch (e) {
-      console.error("[PLANTAO] getConfig error:", e);
-      throw new InternalServerErrorException("Erro ao buscar config do Plantão");
+      console.error('[PLANTAO] getConfig error:', e);
+      throw new InternalServerErrorException(
+        'Erro ao buscar config do Plantão',
+      );
     }
   }
 
-  async saveConfig(payload: Omit<PlantaoConfigDTO, "configId">): Promise<{ ok: true }> {
+  async updateHorarios(body: any) {
     try {
-      await this.prisma.$transaction(async (tx) => {
-        let config = await tx.plantaoConfig.findFirst({
-          orderBy: { createdAt: "asc" },
-        });
+      const config = await this.ensureConfig();
 
-        if (!config) {
-          config = await tx.plantaoConfig.create({
-            data: {
-              janelaSisInicio: "08:00",
-              janelaSisFim: "18:00",
-              janelaInfInicio: "08:00",
-              janelaInfFim: "18:00",
-              escalaSistemas: escalaVazia(),
-              escalaInfra: escalaVazia(),
-            },
-          });
-        }
-
-        const configId = config.id;
-
-        await tx.plantaoConfig.update({
-          where: { id: configId },
-          data: {
-            janelaSisInicio: payload.janelaSistemas?.inicio ?? "08:00",
-            janelaSisFim: payload.janelaSistemas?.fim ?? "18:00",
-            janelaInfInicio: payload.janelaInfra?.inicio ?? "08:00",
-            janelaInfFim: payload.janelaInfra?.fim ?? "18:00",
-            escalaSistemas: payload.escalaSistemas ?? escalaVazia(),
-            escalaInfra: payload.escalaInfra ?? escalaVazia(),
-          },
-        });
-
-        await tx.plantaoContato.deleteMany({
-          where: { configId },
-        });
-
-        if (payload.contatos?.length) {
-          await tx.plantaoContato.createMany({
-            data: payload.contatos.map((c) => ({
-              id: c.id?.trim() || crypto.randomUUID(),
-              configId,
-              nome: c.nome || "",
-              telefone: c.telefone || "",
-              area: c.area === "Infra" ? "Infra" : "Sistemas",
-            })),
-          });
-        }
+      await this.prisma.plantaoConfig.update({
+        where: { id: config.id },
+        data: {
+          janelaSisInicio: body.janelaSistemas?.inicio ?? '08:00',
+          janelaSisFim: body.janelaSistemas?.fim ?? '18:00',
+          janelaInfInicio: body.janelaInfra?.inicio ?? '08:00',
+          janelaInfFim: body.janelaInfra?.fim ?? '18:00',
+        },
       });
 
       return { ok: true };
     } catch (e) {
-      console.error("[PLANTAO] saveConfig error:", e);
-      throw new InternalServerErrorException("Erro ao salvar config do Plantão");
+      console.error('[PLANTAO] updateHorarios error:', e);
+      throw new InternalServerErrorException(
+        'Erro ao atualizar horários do Plantão',
+      );
+    }
+  }
+
+  async updateMembrosEquipe(body: any): Promise<{ ok: true }> {
+    try {
+      const config = await this.ensureConfig();
+
+      await this.prisma.plantaoContato.deleteMany({
+        where: { configId: config.id },
+      });
+
+      if (body.contatos?.length) {
+        await this.prisma.plantaoContato.createMany({
+          data: body.contatos.map((c) => ({
+            id: c.id?.trim() || crypto.randomUUID(),
+            configId: config.id,
+            nome: c.nome || '',
+            telefone: c.telefone || '',
+            area: c.area === 'Infra' ? 'Infra' : 'Sistemas',
+          })),
+        });
+      }
+
+      return { ok: true };
+    } catch (e) {
+      console.error('[PLANTAO] updateMembrosEquipe error:', e);
+      throw new InternalServerErrorException(
+        'Erro ao atualizar membros da equipe do Plantão',
+      );
+    }
+  }
+
+  async updateEscalas(body: any): Promise<{ ok: true }> {
+    try {
+      const config = await this.ensureConfig();
+
+      await this.prisma.plantaoConfig.update({
+        where: { id: config.id },
+        data: {
+          escalaSistemas: body.escalaSistemas ?? escalaVazia(),
+          escalaInfra: body.escalaInfra ?? escalaVazia(),
+        },
+      });
+
+      return { ok: true };
+    } catch (e) {
+      console.error('[PLANTAO] updateEscalas error:', e);
+      throw new InternalServerErrorException(
+        'Erro ao atualizar escalas do Plantão',
+      );
+    }
+  }
+
+  async getAllPlantonistas() {
+    return await this.prisma.plantaoContato.findMany();
+  }
+
+  async getAllEscalasAndHorarios() {
+    return await this.prisma.plantaoConfig.findFirst();
+  }
+
+  async getPlantonistaDiaSemana() {
+    try {
+      const config = await this.ensureConfig();
+
+      const diasSemana: Record<number, DiaSemana> = {
+        0: 'domingo',
+        1: 'segunda',
+        2: 'terca',
+        3: 'quarta',
+        4: 'quinta',
+        5: 'sexta',
+        6: 'sabado',
+      };
+
+      const hoje = new Date();
+      const diaAtual = diasSemana[hoje.getDay()];
+
+      const escalaSistemas: EscalaSemanal =
+        (config.escalaSistemas as EscalaSemanal) ?? {
+          segunda: '',
+          terca: '',
+          quarta: '',
+          quinta: '',
+          sexta: '',
+          sabado: '',
+          domingo: '',
+        };
+
+      const escalaInfra: EscalaSemanal =
+        (config.escalaInfra as EscalaSemanal) ?? {
+          segunda: '',
+          terca: '',
+          quarta: '',
+          quinta: '',
+          sexta: '',
+          sabado: '',
+          domingo: '',
+        };
+
+      const nomePlantonistaSistemas = escalaSistemas[diaAtual] || '';
+      const nomePlantonistaInfra = escalaInfra[diaAtual] || '';
+
+      const nomesPlantonistas = [
+        nomePlantonistaSistemas,
+        nomePlantonistaInfra,
+      ].filter(Boolean);
+
+      const contatosPlantao =
+        nomesPlantonistas.length > 0
+          ? await this.prisma.plantaoContato.findMany({
+              where: {
+                nome: {
+                  in: nomesPlantonistas,
+                },
+              },
+            })
+          : [];
+
+      const telefoneSistemas =
+        contatosPlantao.find(
+          (contato) => contato.nome === nomePlantonistaSistemas,
+        )?.telefone || '';
+
+      const telefoneInfra =
+        contatosPlantao.find((contato) => contato.nome === nomePlantonistaInfra)
+          ?.telefone || '';
+
+      const retorno = {
+        diaSemana: diaAtual,
+        sistemas: {
+          nome: nomePlantonistaSistemas,
+          inicio: config.janelaSisInicio,
+          fim: config.janelaSisFim,
+          telefone: telefoneSistemas,
+        },
+        infra: {
+          nome: nomePlantonistaInfra,
+          inicio: config.janelaInfInicio,
+          fim: config.janelaInfFim,
+          telefone: telefoneInfra,
+        },
+      };
+
+      return retorno;
+    } catch (e) {
+      console.error('[PLANTAO] getPlantonistaDiaSemana error:', e);
+      throw new InternalServerErrorException(
+        'Erro ao buscar plantonistas do dia',
+      );
     }
   }
 }

@@ -1,32 +1,68 @@
-import { Body, Controller, Get, Put } from "@nestjs/common";
-import { PlantaoService, PlantaoConfigDTO } from "./plantao.service";
-import { ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { PlantaoService } from './plantao.service';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { PlantaoConfigDTO } from './dtos/plantao.dto';
+import { AuthGuard } from 'src/auth/auth.guard';
 
-@ApiTags("Plantao")
-@Controller("plantao")
+@ApiTags('Plantao')
+@Controller('plantao')
 export class PlantaoController {
   constructor(private readonly service: PlantaoService) {}
 
-  @Get("config")
+  @UseGuards(AuthGuard)
+  @Get('config')
+  @ApiOperation({ summary: 'Encontra as informações do Plantão' })
   async getConfig() {
     return await this.service.getConfig();
   }
 
-  @Get("ping")
-  ping() {
-    return {
-      ok: true,
-      env: process.env.DATABASE_URL,
-    };
+  // @Get('ping')
+  // @ApiOperation({ summary: 'Atualiza as informações do Plantão' })
+  // ping() {
+  //   return {
+  //     ok: true,
+  //     env: process.env.DATABASE_URL,
+  //   };
+  // }
+
+  @UseGuards(AuthGuard)
+  @Put('update-horarios')
+  @ApiOperation({ summary: 'Atualiza as informações do Horario' })
+  async updateHorario(@Body() body: any) {
+    return await this.service.updateHorarios(body);
   }
 
-  @Put("update-config")
-  async saveConfig(@Body() body: PlantaoConfigDTO) {
-    console.log("[PLANTAO] HIT update-config", {
-      contatos: body?.contatos?.length,
-      configId: body?.configId,
-    });
+  @UseGuards(AuthGuard)
+  @Put('update-membros-equipe')
+  @ApiOperation({ summary: 'Atualiza as informações dos Membros da Equipe' })
+  async updateMembrosEquipe(@Body() body: any) {
+    return await this.service.updateMembrosEquipe(body);
+  }
 
-    return await this.service.saveConfig(body);
+  @UseGuards(AuthGuard)
+  @Put('update-escalas')
+  @ApiOperation({ summary: 'Atualiza as informações das Escalas' })
+  async updateEscalas(@Body() body: any) {
+    return await this.service.updateEscalas(body);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('find-all-plantonistas')
+  @ApiOperation({ summary: 'Encontra todos os Plantonistas' })
+  async getAllPlantonistas() {
+    return await this.service.getAllPlantonistas();
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('find-all-escalas-and-horarios')
+  @ApiOperation({ summary: 'Encontra todas as Escalas e Horarios' })
+  async getAllEscalasAndHorarios() {
+    return await this.service.getAllEscalasAndHorarios();
+  }
+
+  @Get('find-plantonista-dia-semana')
+  @ApiOperation({ summary: 'Encontra os plantonistas do dia Atual' })
+  async getPlantonistaDiaSemana() {
+    return await this.service.getPlantonistaDiaSemana();
   }
 }
