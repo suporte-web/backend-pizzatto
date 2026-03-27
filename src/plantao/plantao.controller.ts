@@ -3,6 +3,8 @@ import { PlantaoService } from './plantao.service';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PlantaoConfigDTO } from './dtos/plantao.dto';
 import { AuthGuard } from 'src/auth/auth.guard';
+import { ClientIp } from 'src/decorator/client-ip.decorator';
+import { User } from 'src/decorator/user.decorator';
 
 @ApiTags('Plantao')
 @Controller('plantao')
@@ -28,22 +30,34 @@ export class PlantaoController {
   @UseGuards(AuthGuard)
   @Put('update-horarios')
   @ApiOperation({ summary: 'Atualiza as informações do Horario' })
-  async updateHorario(@Body() body: any) {
-    return await this.service.updateHorarios(body);
+  async updateHorario(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.service.updateHorarios(body, ip, user);
   }
 
   @UseGuards(AuthGuard)
   @Put('update-membros-equipe')
   @ApiOperation({ summary: 'Atualiza as informações dos Membros da Equipe' })
-  async updateMembrosEquipe(@Body() body: any) {
-    return await this.service.updateMembrosEquipe(body);
+  async updateMembrosEquipe(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.service.updateMembrosEquipe(body, ip, user);
   }
 
   @UseGuards(AuthGuard)
   @Put('update-escalas')
   @ApiOperation({ summary: 'Atualiza as informações das Escalas' })
-  async updateEscalas(@Body() body: any) {
-    return await this.service.updateEscalas(body);
+  async updateEscalas(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.service.updateEscalas(body, ip, user);
   }
 
   @UseGuards(AuthGuard)

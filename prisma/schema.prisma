@@ -139,6 +139,19 @@ model AssinaturaPadrao {
   telefoneY         Int?
 }
 
+model Calendario {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome         String
+  data         String
+  horario      String
+  local        String?
+  criadoPor    String?
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime @default(now()) @db.Timestamp(6)
+  descricao    String?
+  departamento String[]
+}
+
 enum Area {
   Sistemas
   Infra

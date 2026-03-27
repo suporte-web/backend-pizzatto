@@ -47,7 +47,7 @@ export class AssinaturasEmailService {
       data: {
         acao: `Criou a Assinatura de E-mail de ${create.nome}`,
         entidade: user.name,
-        filialEntidade: user.filial,
+        filialEntidade: user.company,
         ipAddress: ip,
       },
     });
@@ -127,6 +127,7 @@ export class AssinaturasEmailService {
 
     let subject = '';
     let html = '';
+    let attachments: any[] = [];
 
     if (body.status === 'REPROVADO') {
       subject = 'Sua assinatura foi reprovada ❌';
@@ -193,66 +194,75 @@ export class AssinaturasEmailService {
         </div>
       `;
     } else if (body.status === 'APROVADO') {
+      const caminhoImagem = assinatura.caminhoImagem || '';
+
       subject = 'Sua assinatura foi aprovada ✅';
 
       html = `
-        <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8; padding:32px 16px;">
-            <tr>
-              <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 4px 18px rgba(0,0,0,0.08);">
-                  
-                  <tr>
-                    <td style="background:linear-gradient(90deg, #2e7d32, #43a047); padding:24px 32px; color:#ffffff;">
-                      <h1 style="margin:0; font-size:24px; font-weight:700;">Assinatura aprovada</h1>
-                      <p style="margin:8px 0 0; font-size:14px; opacity:0.95;">
-                        Sua assinatura de e-mail foi validada com sucesso
-                      </p>
-                    </td>
-                  </tr>
+    <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8; padding:32px 16px;">
+        <tr>
+          <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 4px 18px rgba(0,0,0,0.08);">
+              
+              <tr>
+                <td style="background:linear-gradient(90deg, #2e7d32, #43a047); padding:24px 32px; color:#ffffff;">
+                  <h1 style="margin:0; font-size:24px; font-weight:700;">Assinatura aprovada</h1>
+                  <p style="margin:8px 0 0; font-size:14px; opacity:0.95;">
+                    Sua assinatura de e-mail foi validada com sucesso
+                  </p>
+                </td>
+              </tr>
 
-                  <tr>
-                    <td style="padding:32px;">
-                      <p style="margin:0 0 16px; font-size:16px; color:#333333;">
-                        Olá, <strong>${body.nome}</strong>.
-                      </p>
+              <tr>
+                <td style="padding:32px;">
+                  <p style="margin:0 0 16px; font-size:16px; color:#333333;">
+                    Olá, <strong>${body.nome}</strong>.
+                  </p>
 
-                      <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
-                        Temos uma boa notícia: sua solicitação de assinatura de e-mail foi
-                        <strong style="color:#2e7d32;"> aprovada com sucesso</strong>.
-                      </p>
+                  <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
+                    Temos uma boa notícia: sua solicitação de assinatura de e-mail foi
+                    <strong style="color:#2e7d32;"> aprovada com sucesso</strong>.
+                  </p>
 
-                      <div style="margin:24px 0; padding:18px 20px; background:#f1f8f2; border:1px solid #cfe8d1; border-radius:10px;">
-                        <p style="margin:0; font-size:14px; line-height:1.7; color:#2f5d34;">
-                          A assinatura aprovada segue em anexo neste e-mail e já está liberada para uso.
-                        </p>
-                      </div>
+                  <div style="margin:24px 0; padding:18px 20px; background:#f1f8f2; border:1px solid #cfe8d1; border-radius:10px;">
+                    <p style="margin:0; font-size:14px; line-height:1.7; color:#2f5d34;">
+                      A assinatura aprovada segue em anexo neste e-mail para download.
+                    </p>
+                  </div>
 
-                      <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
-                        Recomendamos que utilize o arquivo enviado como padrão oficial da sua assinatura corporativa.
-                      </p>
+                  <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
+                    Recomendamos que utilize o arquivo enviado como padrão oficial da sua assinatura corporativa.
+                  </p>
 
-                      <p style="margin:24px 0 0; font-size:15px; color:#333333;">
-                        Atenciosamente,<br />
-                        <strong>Equipe de Marketing</strong>
-                      </p>
-                    </td>
-                  </tr>
+                  <p style="margin:24px 0 0; font-size:15px; color:#333333;">
+                    Atenciosamente,<br />
+                    <strong>Equipe de Marketing</strong>
+                  </p>
+                </td>
+              </tr>
 
-                  <tr>
-                    <td style="padding:18px 32px; background:#fafafa; border-top:1px solid #eeeeee;">
-                      <p style="margin:0; font-size:12px; color:#888888; text-align:center;">
-                        Este é um e-mail automático. Em caso de dúvidas, entre em contato com a equipe responsável.
-                      </p>
-                    </td>
-                  </tr>
+              <tr>
+                <td style="padding:18px 32px; background:#fafafa; border-top:1px solid #eeeeee;">
+                  <p style="margin:0; font-size:12px; color:#888888; text-align:center;">
+                    Este é um e-mail automático. Em caso de dúvidas, entre em contato com a equipe responsável.
+                  </p>
+                </td>
+              </tr>
 
-                </table>
-              </td>
-            </tr>
-          </table>
-        </div>
-      `;
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+
+      if (caminhoImagem) {
+        attachments.push({
+          filename: 'assinatura-aprovada.png',
+          path: `${process.env.API_BACKEND}/${caminhoImagem}`,
+        });
+      }
     } else {
       throw new BadRequestException('Status inválido.');
     }
@@ -260,8 +270,9 @@ export class AssinaturasEmailService {
     await this.transporter.sendMail({
       from: process.env.SMTP_FROM,
       to: body.email,
-      subject: subject,
-      html: html,
+      subject,
+      html,
+      attachments,
     });
 
     await this.prisma.assinatura.update({

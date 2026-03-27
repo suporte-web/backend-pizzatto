@@ -12,6 +12,7 @@ import { PlantaoModule } from './plantao/plantao.module.';
 import { PrismaModule } from './prisma/prisma.module';
 import { AssinaturasEmailModule } from './assinaturasEmail/assinaturasEmail.module';
 import { AssinaturaPadraoModule } from './assinaturaPadrao/assinaturaPadrao.module';
+import { CalendarioModule } from './calendario/calendario.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AssinaturaPadraoModule } from './assinaturaPadrao/assinaturaPadrao.modu
     PlantaoModule,
     AssinaturasEmailModule,
     AssinaturaPadraoModule,
+    CalendarioModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -55,13 +55,7 @@ export class ToDoService {
   }
 
   async findByFilter(body: any) {
-    const {
-      pesquisa,
-      page = 1,
-      limit = 10,
-      finalizado,
-      responsavel,
-    } = body;
+    const { pesquisa, page = 1, limit = 10, finalizado, responsavel } = body;
 
     const skip = (page - 1) * limit;
 
@@ -76,7 +70,7 @@ export class ToDoService {
           { descricao: { contains: pesquisa, mode: 'insensitive' } },
           { responsavel: { contains: pesquisa, mode: 'insensitive' } },
         ],
-      }); 
+      });
     }
 
     if (finalizado === true) {
@@ -85,10 +79,7 @@ export class ToDoService {
       });
     } else if (finalizado === false) {
       where.AND.push({
-        OR: [
-          { finalizado: false },
-          { finalizado: null },
-        ],
+        finalizado: false,
       });
     }
 

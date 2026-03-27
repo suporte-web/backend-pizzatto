@@ -101,7 +101,7 @@ export class PlantaoService {
     }
   }
 
-  async updateHorarios(body: any) {
+  async updateHorarios(body: any, ip: string, user: any) {
     try {
       const config = await this.ensureConfig();
 
@@ -115,6 +115,15 @@ export class PlantaoService {
         },
       });
 
+      await this.prisma.audit_logs.create({
+        data: {
+          acao: 'Atualizou os Horarios do Plantão',
+          entidade: user?.name,
+          filialEntidade: user?.filial,
+          ipAddress: ip,
+        },
+      });
+
       return { ok: true };
     } catch (e) {
       console.error('[PLANTAO] updateHorarios error:', e);
@@ -124,7 +133,11 @@ export class PlantaoService {
     }
   }
 
-  async updateMembrosEquipe(body: any): Promise<{ ok: true }> {
+  async updateMembrosEquipe(
+    body: any,
+    ip: string,
+    user: any,
+  ): Promise<{ ok: true }> {
     try {
       const config = await this.ensureConfig();
 
@@ -142,6 +155,15 @@ export class PlantaoService {
             area: c.area === 'Infra' ? 'Infra' : 'Sistemas',
           })),
         });
+
+        await this.prisma.audit_logs.create({
+          data: {
+            acao: 'Atualizou os Membros de Equipe do Plantão',
+            entidade: user?.name,
+            filialEntidade: user?.filial,
+            ipAddress: ip,
+          },
+        });
       }
 
       return { ok: true };
@@ -153,7 +175,7 @@ export class PlantaoService {
     }
   }
 
-  async updateEscalas(body: any): Promise<{ ok: true }> {
+  async updateEscalas(body: any, ip: string, user: any): Promise<{ ok: true }> {
     try {
       const config = await this.ensureConfig();
 
@@ -162,6 +184,15 @@ export class PlantaoService {
         data: {
           escalaSistemas: body.escalaSistemas ?? escalaVazia(),
           escalaInfra: body.escalaInfra ?? escalaVazia(),
+        },
+      });
+
+      await this.prisma.audit_logs.create({
+        data: {
+          acao: 'Atualizou a Escala de Plantão',
+          entidade: user?.name,
+          filialEntidade: user?.filial,
+          ipAddress: ip,
         },
       });
 
