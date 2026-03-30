@@ -148,7 +148,6 @@ export class PlantaoService {
       if (body.contatos?.length) {
         await this.prisma.plantaoContato.createMany({
           data: body.contatos.map((c) => ({
-            id: c.id?.trim() || crypto.randomUUID(),
             configId: config.id,
             nome: c.nome || '',
             telefone: c.telefone || '',
