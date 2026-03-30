@@ -152,6 +152,33 @@ model Calendario {
   departamento String[]
 }
 
+model PoliticaAceites {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  colaborador String
+  dataAceite  DateTime  @default(now())
+  politicaId  String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  Politicas   Politicas @relation(fields: [politicaId], references: [id])
+}
+
+model Politicas {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caminhoArquivo       String?
+  nome                 String
+  descricao            String
+  responsavel          String
+  dataUpload           String?
+  criadoPor            String?
+  vers_o               String            @default("1") @map("versão")
+  ativo                Boolean           @default(true)
+  liberadoVisualizacao Boolean           @default(false)
+  createdAt            DateTime          @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime          @default(now()) @db.Timestamp(6)
+  departamento         String
+  tipoPolitica         String
+  PoliticaAceites      PoliticaAceites[]
+}
+
 enum Area {
   Sistemas
   Infra

@@ -13,6 +13,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AssinaturasEmailModule } from './assinaturasEmail/assinaturasEmail.module';
 import { AssinaturaPadraoModule } from './assinaturaPadrao/assinaturaPadrao.module';
 import { CalendarioModule } from './calendario/calendario.module';
+import { PoliticasModule } from './politicas/politicas.module';
+import { PoliticasAceitesModule } from './politicaAceites/politicaAceites.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { CalendarioModule } from './calendario/calendario.module';
     AssinaturasEmailModule,
     AssinaturaPadraoModule,
     CalendarioModule,
+    PoliticasModule,
+    PoliticasAceitesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
