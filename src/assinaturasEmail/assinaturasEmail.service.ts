@@ -5,8 +5,8 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class AssinaturasEmailService {
   private transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_POR,
     secure: true,
     auth: {
       user: process.env.SMTP_USER,
