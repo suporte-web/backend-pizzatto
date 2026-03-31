@@ -6,7 +6,7 @@ import * as nodemailer from 'nodemailer';
 export class AssinaturasEmailService {
   private transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: process.env.SMTP_POR,
+    port: process.env.SMTP_PORT,
     secure: true,
     auth: {
       user: process.env.SMTP_USER,
@@ -23,6 +23,13 @@ export class AssinaturasEmailService {
       .catch((error) => {
         console.error('Erro ao conectar no SMTP:', error);
       });
+
+    console.log('SMTP DEBUG', {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      user: process.env.SMTP_USER,
+      passExists: !!process.env.SMTP_PASS,
+    });
   }
 
   async create(body: any, file: Express.Multer.File, ip: string, user: any) {
