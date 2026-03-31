@@ -46,17 +46,19 @@ model InventarioImpressoras {
 }
 
 model Mural {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  titulo        String
-  mensagem      String
-  caminhoImagem String?
-  filiais       String[]
-  createdAt     DateTime @default(now()) @db.Timestamp(6)
-  updatedAt     DateTime @default(now()) @db.Timestamp(6)
-  ativo         Boolean  @default(true)
-  validoAte     String
-  criadoPor     String
-  importante    Boolean  @default(false)
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo          String
+  mensagem        String
+  caminhoImagem   String?
+  filiais         String[]
+  createdAt       DateTime          @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime          @default(now()) @db.Timestamp(6)
+  ativo           Boolean           @default(true)
+  validoAte       String
+  criadoPor       String
+  importante      Boolean           @default(false)
+  MuralComentario MuralComentario[]
+  MuralLike       MuralLike[]
 }
 
 model Pops {
@@ -169,14 +171,39 @@ model Politicas {
   responsavel          String
   dataUpload           String?
   criadoPor            String?
-  vers_o               String            @default("1") @map("versão")
   ativo                Boolean           @default(true)
   liberadoVisualizacao Boolean           @default(false)
   createdAt            DateTime          @default(now()) @db.Timestamp(6)
   updatedAt            DateTime          @default(now()) @db.Timestamp(6)
   departamento         String
   tipoPolitica         String
+  versao               String            @default("1")
   PoliticaAceites      PoliticaAceites[]
+}
+
+model MuralComentario {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  muralId    String   @db.Uuid
+  codigo     String
+  nome       String
+  comentario String
+  createdAt  DateTime @default(now()) @db.Timestamp(6)
+  updatedAt  DateTime @default(now()) @db.Timestamp(6)
+  Mural      Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
+
+  @@index([muralId])
+}
+
+model MuralLike {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  muralId   String   @db.Uuid
+  codigo    String
+  nome      String
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  Mural     Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
+
+  @@unique([muralId, codigo])
+  @@index([muralId])
 }
 
 enum Area {
