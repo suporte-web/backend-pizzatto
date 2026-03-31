@@ -23,13 +23,6 @@ export class AssinaturasEmailService {
       .catch((error) => {
         console.error('Erro ao conectar no SMTP:', error);
       });
-
-    console.log('SMTP DEBUG', {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      user: process.env.SMTP_USER,
-      passExists: !!process.env.SMTP_PASS,
-    });
   }
 
   async create(body: any, file: Express.Multer.File, ip: string, user: any) {
