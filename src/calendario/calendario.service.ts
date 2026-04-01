@@ -10,7 +10,7 @@ export class CalendarioService {
       where: {
         horario: body.horario,
         data: body.data,
-        departamento: { hasSome: body.departamento },
+        colaboradores: { hasSome: body.colaboradores },
       },
     });
 
@@ -25,7 +25,7 @@ export class CalendarioService {
         nome: body.nome,
         horario: body.horario,
         data: body.data,
-        departamento: body.departamento,
+        colaboradores: body.colaboradores,
         local: body.local,
         descricao: body.descricao,
         criadoPor: user?.name,
@@ -45,6 +45,7 @@ export class CalendarioService {
   async findByFilter(body: any) {
     const baseDate = new Date(body.data);
 
+    
     const firstDayCurrentMonth = new Date(
       baseDate.getFullYear(),
       baseDate.getMonth(),
@@ -54,7 +55,7 @@ export class CalendarioService {
       0,
       0,
     );
-
+    
     const lastDayCurrentMonth = new Date(
       baseDate.getFullYear(),
       baseDate.getMonth() + 1,
@@ -64,16 +65,18 @@ export class CalendarioService {
       59,
       999,
     );
-
+    
     const where: any = {
       data: {
-        gte: firstDayCurrentMonth.toISOString(),
-        lte: lastDayCurrentMonth.toISOString(),
+        gte: firstDayCurrentMonth.toISOString().split("T")[0],
+        lte: lastDayCurrentMonth.toISOString().split("T")[0],
       },
     };
 
-    if (body.departamento) {
-      where.departamento = body.departamento;
+    if (body.departamento?.length) {
+      where.departamento = {
+        in: body.departamento,
+      };
     }
 
     if (body.pesquisa) {
