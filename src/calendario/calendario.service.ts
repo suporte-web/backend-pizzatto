@@ -73,9 +73,9 @@ export class CalendarioService {
       },
     };
 
-    if (body.departamento?.length) {
-      where.departamento = {
-        in: body.departamento,
+    if (body.colaborador?.length) {
+      where.colaboradores = {
+        in: body.colaborador,
       };
     }
 
