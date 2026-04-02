@@ -45,7 +45,6 @@ export class CalendarioService {
   async findByFilter(body: any) {
     const baseDate = new Date(body.data);
 
-    
     const firstDayCurrentMonth = new Date(
       baseDate.getFullYear(),
       baseDate.getMonth(),
@@ -55,7 +54,7 @@ export class CalendarioService {
       0,
       0,
     );
-    
+
     const lastDayCurrentMonth = new Date(
       baseDate.getFullYear(),
       baseDate.getMonth() + 1,
@@ -65,17 +64,17 @@ export class CalendarioService {
       59,
       999,
     );
-    
+
     const where: any = {
       data: {
-        gte: firstDayCurrentMonth.toISOString().split("T")[0],
-        lte: lastDayCurrentMonth.toISOString().split("T")[0],
+        gte: firstDayCurrentMonth.toISOString().split('T')[0],
+        lte: lastDayCurrentMonth.toISOString().split('T')[0],
       },
     };
 
     if (body.colaborador?.length) {
       where.colaboradores = {
-        in: body.colaborador,
+        has: body.colaborador,
       };
     }
 
