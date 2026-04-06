@@ -12,10 +12,10 @@ import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { AuthGuard } from 'src/auth/auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { AssinaturasEmailService } from './assinaturasEmail.service';
-import { User } from 'src/decorator/user.decorator';
-import { ClientIp } from 'src/decorator/client-ip.decorator';
+import { User } from '../decorator/user.decorator';
+import { ClientIp } from '../decorator/client-ip.decorator';
 
 @ApiTags('AssinaturasEmail')
 @Controller('assinaturas-email')

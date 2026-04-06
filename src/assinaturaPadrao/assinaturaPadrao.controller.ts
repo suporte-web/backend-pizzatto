@@ -8,12 +8,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AuthGuard } from 'src/auth/auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { AssinaturaPadraoService } from './assinaturaPadrao.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { ClientIp } from 'src/decorator/client-ip.decorator';
-import { User } from 'src/decorator/user.decorator';
+import { ClientIp } from '../decorator/client-ip.decorator';
+import { User } from '../decorator/user.decorator';
 import { extname } from 'path';
 
 @ApiTags('AssinaturaPadrao')

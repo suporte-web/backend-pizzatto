@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ContasOfficeService } from './contasOffice.service';
-import { AuthGuard } from 'src/auth/auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('ContasOffice')

@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ToDoService } from './to-do.service';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AuthGuard } from 'src/auth/auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 
 @ApiTags('ToDo')
 @Controller('to-do')

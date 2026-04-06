@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "compilerOptions": {
+    "types": ["jest", "node"]
+  },
+  "include": ["**/*.spec.ts", "**/*.e2e-spec.ts", "test/**/*.ts"]
 }

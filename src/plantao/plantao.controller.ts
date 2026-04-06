@@ -1,10 +1,9 @@
 import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
 import { PlantaoService } from './plantao.service';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PlantaoConfigDTO } from './dtos/plantao.dto';
-import { AuthGuard } from 'src/auth/auth.guard';
-import { ClientIp } from 'src/decorator/client-ip.decorator';
-import { User } from 'src/decorator/user.decorator';
+import { AuthGuard } from '../auth/auth.guard';
+import { ClientIp } from '../decorator/client-ip.decorator';
+import { User } from '../decorator/user.decorator';
 
 @ApiTags('Plantao')
 @Controller('plantao')

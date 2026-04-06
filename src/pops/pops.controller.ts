@@ -11,8 +11,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiTags, ApiConsumes } from '@nestjs/swagger';
 import { PopService } from './pops.service';
-import { FileService } from 'src/file/file.service';
-import { AuthGuard } from 'src/auth/auth.guard';
+import { FileService } from '../file/file.service';
+import { AuthGuard } from '../auth/auth.guard';
 
 @ApiTags('Pop')
 @Controller('pop')

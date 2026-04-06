@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AuthGuard } from 'src/auth/auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { PoliticasAceitesService } from './politicaAceites.service';
-import { ClientIp } from 'src/decorator/client-ip.decorator';
-import { User } from 'src/decorator/user.decorator';
+import { ClientIp } from '../decorator/client-ip.decorator';
+import { User } from '../decorator/user.decorator';
 
 @ApiTags('Politicas-Aceites')
 @Controller('politicas-aceites')

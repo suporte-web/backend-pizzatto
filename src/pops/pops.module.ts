@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from '../auth/auth.module';
 import { PopController } from './pops.controller';
-import { FileModule } from 'src/file/file.module';
-import { FileService } from 'src/file/file.service';
+import { FileModule } from '../file/file.module';
+import { FileService } from '../file/file.service';
 import { PopService } from './pops.service';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Module({
   imports: [

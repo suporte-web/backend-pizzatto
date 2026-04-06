@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
-import { AuthModule } from "src/auth/auth.module";
+import { AuthModule } from "../auth/auth.module";
 import { AssinaturaPadraoService } from "./assinaturaPadrao.service";
-import { PrismaService } from "src/prisma/prisma.service";
+import { PrismaService } from "../prisma/prisma.service";
 import { AssinaturaPadraoController } from "./assinaturaPadrao.controller";
 
 @Module({
