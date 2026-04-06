@@ -16,7 +16,7 @@ export class CalendarioService {
 
     if (find) {
       throw new BadRequestException(
-        'Não é possivel cadastrar outro Evento, em Area e Horarios ja preenchidos',
+        'Não é possivel cadastrar outro Evento, com Colaboradores e Horarios ja preenchidos',
       );
     }
 
@@ -72,7 +72,7 @@ export class CalendarioService {
       },
     };
 
-    if (body.colaborador?.length) {
+    if (body.colaborador) {
       where.colaboradores = {
         has: body.colaborador,
       };
