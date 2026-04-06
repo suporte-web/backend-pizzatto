@@ -1,16 +1,14 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
-import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { join } from 'path';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Ativa validação global dos DTOs
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -19,7 +17,6 @@ async function bootstrap() {
     }),
   );
 
-  // Libera CORS para qualquer origem
   app.enableCors({
     origin: true,
     credentials: true,
@@ -29,7 +26,6 @@ async function bootstrap() {
     prefix: '/downloads/',
   });
 
-  // Configuração do Swagger
   const config = new DocumentBuilder()
     .setTitle('API Pizzatto Infra')
     .setDescription('Documentação da API Pizzatto Infra')
@@ -39,6 +35,13 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = Number(process.env.PORT ?? 3000);
+  await app.listen(port);
+
+  Logger.log(`Application running on port ${port}`, 'Bootstrap');
 }
-bootstrap();
+
+bootstrap().catch((error) => {
+  Logger.error(error, '', 'Bootstrap');
+  process.exit(1);
+});
