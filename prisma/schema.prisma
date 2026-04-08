@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
@@ -204,6 +205,27 @@ model MuralLike {
 
   @@unique([muralId, codigo])
   @@index([muralId])
+}
+
+model PaginaInstitucional {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo          String
+  descricao       String
+  caminhoImagem   String[]
+  dataAtualizacao String
+  createdAt       DateTime @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime @default(now()) @db.Timestamp(6)
+  status          Boolean  @default(true)
+}
+
+model BibliotecaMarca {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome           String
+  caminhoArquivo String?
+  status         Boolean  @default(true)
+  descricao      String
+  createdAt      DateTime @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime @default(now()) @db.Timestamp(6)
 }
 
 enum Area {

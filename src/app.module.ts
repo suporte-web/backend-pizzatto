@@ -15,6 +15,8 @@ import { AssinaturaPadraoModule } from './assinaturaPadrao/assinaturaPadrao.modu
 import { CalendarioModule } from './calendario/calendario.module';
 import { PoliticasModule } from './politicas/politicas.module';
 import { PoliticasAceitesModule } from './politicaAceites/politicaAceites.module';
+import { PaginaInstitucionalModule } from './paginaInstitucional/paginaInstitucional.module';
+import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { PoliticasAceitesModule } from './politicaAceites/politicaAceites.module
     CalendarioModule,
     PoliticasModule,
     PoliticasAceitesModule,
+    PaginaInstitucionalModule,
+    BibliotecaMarcaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
