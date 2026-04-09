@@ -47,19 +47,20 @@ model InventarioImpressoras {
 }
 
 model Mural {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  titulo          String
-  mensagem        String
-  caminhoImagem   String?
-  filiais         String[]
-  createdAt       DateTime          @default(now()) @db.Timestamp(6)
-  updatedAt       DateTime          @default(now()) @db.Timestamp(6)
-  ativo           Boolean           @default(true)
-  validoAte       String
-  criadoPor       String
-  importante      Boolean           @default(false)
-  MuralComentario MuralComentario[]
-  MuralLike       MuralLike[]
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo              String
+  mensagem            String
+  caminhoImagem       String?
+  filiais             String[]
+  createdAt           DateTime          @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime          @default(now()) @db.Timestamp(6)
+  ativo               Boolean           @default(true)
+  validoAte           String
+  criadoPor           String
+  importante          Boolean           @default(false)
+  departamentoCriador String?
+  MuralComentario     MuralComentario[]
+  MuralLike           MuralLike[]
 }
 
 model Pops {
@@ -96,27 +97,24 @@ model audit_logs {
 }
 
 model PlantaoConfig {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  janelaSisInicio String
-  janelaSisFim    String
-  janelaInfInicio String
-  janelaInfFim    String
-  escalaSistemas  Json
-  escalaInfra     Json
-  createdAt       DateTime         @default(now()) @db.Timestamp(6)
-  updatedAt       DateTime         @default(now()) @db.Timestamp(6)
-  PlantaoContato  PlantaoContato[]
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt      DateTime        @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime        @default(now()) @db.Timestamp(6)
+  dataJanela     String
+  janelaFim      String
+  janelaInicio   String
+  plantonistaId  String?         @db.Uuid
+  PlantaoContato PlantaoContato? @relation(fields: [plantonistaId], references: [id])
 }
 
 model PlantaoContato {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome          String
   telefone      String
   area          Area
-  createdAt     DateTime      @default(now()) @db.Timestamp(6)
-  updatedAt     DateTime      @default(now()) @db.Timestamp(6)
-  configId      String        @db.Uuid
-  PlantaoConfig PlantaoConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime        @default(now()) @db.Timestamp(6)
+  PlantaoConfig PlantaoConfig[]
 }
 
 model AssinaturaPadrao {
