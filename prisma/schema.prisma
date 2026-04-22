@@ -226,7 +226,95 @@ model BibliotecaMarca {
   updatedAt      DateTime @default(now()) @db.Timestamp(6)
 }
 
+model Conversa {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tipo                 TipoConversa
+  nome                 String?
+  chaveDireta          String?                @unique
+  criadoPorId          String                 @db.Uuid
+  ultimaMensagemEm     DateTime?
+  createdAt            DateTime               @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime               @default(now()) @db.Timestamp(6)
+  UsuarioChat          UsuarioChat            @relation(fields: [criadoPorId], references: [id])
+  Mensagem             Mensagem[]
+  ParticipanteConversa ParticipanteConversa[]
+
+  @@index([criadoPorId])
+  @@index([tipo])
+  @@index([ultimaMensagemEm])
+}
+
+model Mensagem {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversaId   String       @db.Uuid
+  remetenteId  String       @db.Uuid
+  conteudo     String?
+  createdAt    DateTime     @default(now()) @db.Timestamp(6)
+  deletedAt    DateTime?
+  updatedAt    DateTime     @default(now()) @db.Timestamp(6)
+  arquivoUrl   String?
+  mimeType     String?
+  nomeArquivo  String?
+  tamanhoBytes Int?
+  tipo         TipoMensagem @default(TEXTO)
+  nomeSalvo    String?
+  Conversa     Conversa     @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  UsuarioChat  UsuarioChat  @relation(fields: [remetenteId], references: [id])
+
+  @@index([remetenteId])
+  @@index([conversaId, createdAt])
+}
+
+model ParticipanteConversa {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversaId      String      @db.Uuid
+  usuarioId       String      @db.Uuid
+  entrouEm        DateTime    @default(now())
+  ultimaLeituraEm DateTime?
+  admin           Boolean     @default(false)
+  createdAt       DateTime    @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime    @default(now()) @db.Timestamp(6)
+  Conversa        Conversa    @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  UsuarioChat     UsuarioChat @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([conversaId, usuarioId])
+  @@index([conversaId])
+  @@index([usuarioId])
+}
+
+model UsuarioChat {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid         String                 @unique
+  usuario              String
+  nome                 String
+  email                String?
+  empresa              String?
+  departamento         String?
+  telefone             String?
+  ativo                Boolean                @default(true)
+  createdAt            DateTime               @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime               @default(now()) @db.Timestamp(6)
+  Conversa             Conversa[]
+  Mensagem             Mensagem[]
+  ParticipanteConversa ParticipanteConversa[]
+
+  @@index([email])
+  @@index([nome])
+  @@index([usuario])
+}
+
 enum Area {
   Sistemas
   Infra
+}
+
+enum TipoConversa {
+  DIRETA
+  GRUPO
+}
+
+enum TipoMensagem {
+  TEXTO
+  IMAGEM
+  ARQUIVO
 }

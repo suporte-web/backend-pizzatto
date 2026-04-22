@@ -205,9 +205,26 @@ export class PlantaoService {
   }
 
   async create(body: any, ip: string, user: any) {
+    const dataJanela = moment(body.dataJanela || moment()).format('YYYY-MM-DD');
+
+    const alreadyExists = await this.prisma.plantaoConfig.findFirst({
+      where: {
+        dataJanela,
+        plantonistaId: body.plantonistaId,
+      },
+    });
+
+    if (alreadyExists) {
+      return {
+        skipped: true,
+        message: 'Plantão já existente para este plantonista nesta data',
+        data: alreadyExists,
+      };
+    }
+
     const create = await this.prisma.plantaoConfig.create({
       data: {
-        dataJanela: moment().format('YYYY-MM-DD'),
+        dataJanela,
         janelaInicio: body.janelaInicio,
         janelaFim: body.janelaFim,
         plantonistaId: body.plantonistaId,
@@ -223,14 +240,23 @@ export class PlantaoService {
       },
     });
 
-    return create;
+    return {
+      skipped: false,
+      data: create,
+    };
   }
 
   async createBySpreadsheet(body: any, ip: string, user: any) {
     if (Array.isArray(body)) {
-      return Promise.all(
+      const results = await Promise.all(
         body.map((item) => this.createOrUpdateRecord(item, ip, user)),
       );
+
+      return {
+        total: results.length,
+        criados: results.filter((r) => !r.skipped),
+        pulados: results.filter((r) => r.skipped),
+      };
     }
 
     return this.createOrUpdateRecord(body, ip, user);
@@ -246,7 +272,7 @@ export class PlantaoService {
     const nome = data.Nome?.trim();
     const janelaInicio = data.JanelaInicio?.trim().toLowerCase();
     const janelaFim = data.JanelaFim?.trim().toLowerCase();
-    const dataJanela = data.DataJanela?.trim().toLowerCase();
+    const dataJanela = moment(data.DataJanela?.trim()).format('YYYY-MM-DD');
 
     if (!nome || !janelaInicio || !janelaFim || !dataJanela) {
       throw new BadRequestException(
@@ -258,30 +284,49 @@ export class PlantaoService {
       where: { nome },
     });
 
-    if (existingRecord) {
-      const create = await this.prisma.plantaoConfig.create({
-        data: {
-          plantonistaId: existingRecord.id,
-          janelaInicio,
-          janelaFim,
-          dataJanela: moment(dataJanela).format('YYYY-MM-DD'),
-        },
-      });
-
-      await this.prisma.audit_logs.create({
-        data: {
-          acao: `Criou a data de Plantão ${create.id}`,
-          entidade: user?.name,
-          filialEntidade: user?.company,
-          ipAddress: ip,
-        },
-      });
-      return create;
-    } else {
+    if (!existingRecord) {
       throw new BadRequestException(
         'Nome do Plantonista não encontrado, favor colocar o nome do Plantonista correto',
       );
     }
+
+    const existingPlantao = await this.prisma.plantaoConfig.findFirst({
+      where: {
+        plantonistaId: existingRecord.id,
+        dataJanela,
+      },
+    });
+
+    if (existingPlantao) {
+      return {
+        skipped: true,
+        message: `Plantão já existe para ${nome} na data ${dataJanela}`,
+        data: existingPlantao,
+      };
+    }
+
+    const create = await this.prisma.plantaoConfig.create({
+      data: {
+        plantonistaId: existingRecord.id,
+        janelaInicio,
+        janelaFim,
+        dataJanela,
+      },
+    });
+
+    await this.prisma.audit_logs.create({
+      data: {
+        acao: `Criou a data de Plantão ${create.id}`,
+        entidade: user?.name,
+        filialEntidade: user?.company,
+        ipAddress: ip,
+      },
+    });
+
+    return {
+      skipped: false,
+      data: create,
+    };
   }
 
   async deleteContatos(id: string, ip: string, user: any) {

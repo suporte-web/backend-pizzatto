@@ -19,6 +19,7 @@ export class AuthService {
     try {
       // retorna o payload que você colocou no login()
       return await this.jwt.verifyAsync(token, { secret: this.accessSecret });
+      
     } catch {
       throw new UnauthorizedException('Token inválido');
     }
