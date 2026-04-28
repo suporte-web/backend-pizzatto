@@ -155,21 +155,6 @@ export class PlantaoService {
       const inicioSemana = moment().startOf('week');
       const fimSemana = moment().endOf('week');
 
-      const plantoesSemana = await this.prisma.plantaoConfig.findMany({
-        where: {
-          dataJanela: {
-            gte: inicioSemana.format('YYYY-MM-DD'),
-            lte: fimSemana.format('YYYY-MM-DD'),
-          },
-        },
-        include: {
-          PlantaoContato: true,
-        },
-        orderBy: {
-          dataJanela: 'asc',
-        },
-      });
-
       const diasSemana: Record<number, string> = {
         0: 'domingo',
         1: 'segunda',
@@ -180,13 +165,44 @@ export class PlantaoService {
         6: 'sabado',
       };
 
+      const plantoesSemana = await this.prisma.plantaoConfig.findMany({
+        where: {
+          OR: [
+            {
+              status: 'DATA FIXA',
+              dataJanela: {
+                gte: inicioSemana.format('YYYY-MM-DD'),
+                lte: fimSemana.format('YYYY-MM-DD'),
+              },
+            },
+            {
+              status: 'RECORRENTE',
+              diaSemana: {
+                in: [0, 1, 2, 3, 4, 5, 6],
+              },
+            },
+          ],
+        },
+        include: {
+          PlantaoContato: true,
+        },
+      });
+
       const retorno = plantoesSemana.map((plantao) => {
-        const data = moment(plantao.dataJanela, 'YYYY-MM-DD');
-        const diaSemana = diasSemana[data.day()];
+        const isRecorrente = plantao.status === 'RECORRENTE';
+
+        const dataPlantao = isRecorrente
+          ? inicioSemana.clone().day(Number(plantao.diaSemana))
+          : moment(plantao.dataJanela, 'YYYY-MM-DD');
+
+        const numeroDiaSemana = dataPlantao.day();
 
         return {
-          dataJanela: plantao.dataJanela,
-          diaSemana,
+          id: plantao.id,
+          status: plantao.status,
+          dataJanela: dataPlantao.format('YYYY-MM-DD'),
+          diaSemana: diasSemana[numeroDiaSemana],
+          diaSemanaNumero: numeroDiaSemana,
           nome: plantao.PlantaoContato?.nome || '',
           telefone: plantao.PlantaoContato?.telefone || '',
           area: plantao.PlantaoContato?.area || '',
@@ -195,7 +211,13 @@ export class PlantaoService {
         };
       });
 
-      return retorno;
+      return retorno.sort((a, b) => {
+        if (a.dataJanela !== b.dataJanela) {
+          return a.dataJanela.localeCompare(b.dataJanela);
+        }
+
+        return a.janelaInicio.localeCompare(b.janelaInicio);
+      });
     } catch (e) {
       console.error('[PLANTAO] getPlantonistasSemanaAtual error:', e);
       throw new InternalServerErrorException(
@@ -205,19 +227,38 @@ export class PlantaoService {
   }
 
   async create(body: any, ip: string, user: any) {
-    const dataJanela = moment(body.dataJanela || moment()).format('YYYY-MM-DD');
+    const isRecorrente = body.status === 'RECORRENTE';
+
+    const dataJanela = isRecorrente
+      ? null
+      : moment(body.dataJanela || moment()).format('YYYY-MM-DD');
+
+    const diaSemana = isRecorrente ? Number(body.diaSemana) : null;
+
+    if (isRecorrente && !diaSemana) {
+      throw new BadRequestException(
+        'Dia da semana é obrigatório para recorrência',
+      );
+    }
+
+    if (!isRecorrente && !dataJanela) {
+      throw new BadRequestException('Data da janela é obrigatória');
+    }
 
     const alreadyExists = await this.prisma.plantaoConfig.findFirst({
       where: {
-        dataJanela,
         plantonistaId: body.plantonistaId,
+        status: body.status,
+        ...(isRecorrente ? { diaSemana } : { dataJanela }),
       },
     });
 
     if (alreadyExists) {
       return {
         skipped: true,
-        message: 'Plantão já existente para este plantonista nesta data',
+        message: isRecorrente
+          ? 'Plantão recorrente já existente para este plantonista neste dia da semana'
+          : 'Plantão já existente para este plantonista nesta data',
         data: alreadyExists,
       };
     }
@@ -225,9 +266,11 @@ export class PlantaoService {
     const create = await this.prisma.plantaoConfig.create({
       data: {
         dataJanela,
+        diaSemana,
         janelaInicio: body.janelaInicio,
         janelaFim: body.janelaFim,
         plantonistaId: body.plantonistaId,
+        status: body.status,
       },
     });
 
@@ -273,6 +316,7 @@ export class PlantaoService {
     const janelaInicio = data.JanelaInicio?.trim().toLowerCase();
     const janelaFim = data.JanelaFim?.trim().toLowerCase();
     const dataJanela = moment(data.DataJanela?.trim()).format('YYYY-MM-DD');
+    const status = data.Status?.trim();
 
     if (!nome || !janelaInicio || !janelaFim || !dataJanela) {
       throw new BadRequestException(
@@ -311,6 +355,7 @@ export class PlantaoService {
         janelaInicio,
         janelaFim,
         dataJanela,
+        status,
       },
     });
 

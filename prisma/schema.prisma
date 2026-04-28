@@ -73,6 +73,8 @@ model Pops {
   folder       String
   createdAt    DateTime @default(now()) @db.Timestamp(6)
   updatedAt    DateTime @default(now()) @db.Timestamp(6)
+  criadoPor    String?
+  departamento String?
 }
 
 model ToDo {
@@ -100,10 +102,12 @@ model PlantaoConfig {
   id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt      DateTime        @default(now()) @db.Timestamp(6)
   updatedAt      DateTime        @default(now()) @db.Timestamp(6)
-  dataJanela     String
+  dataJanela     String?
   janelaFim      String
   janelaInicio   String
   plantonistaId  String?         @db.Uuid
+  status         String
+  diaSemana      Int?
   PlantaoContato PlantaoContato? @relation(fields: [plantonistaId], references: [id])
 }
 
