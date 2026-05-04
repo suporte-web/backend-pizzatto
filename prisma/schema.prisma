@@ -55,7 +55,7 @@ model Mural {
   createdAt           DateTime          @default(now()) @db.Timestamp(6)
   updatedAt           DateTime          @default(now()) @db.Timestamp(6)
   ativo               Boolean           @default(true)
-  validoAte           String
+  validoAte           String?
   criadoPor           String
   importante          Boolean           @default(false)
   departamentoCriador String?
@@ -122,26 +122,30 @@ model PlantaoContato {
 }
 
 model AssinaturaPadrao {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  caminhoBackground String?
-  corFont           String?
-  criadoPor         String?
-  isAtual           Boolean  @default(true)
-  createdAt         DateTime @default(now()) @db.Timestamp(6)
-  updatedAt         DateTime @default(now()) @db.Timestamp(6)
-  departamentoX     Int?
-  departamentoY     Int?
-  fontSize          String?
-  logoHeight        Int?
-  logoX             Int?
-  logoY             Int?
-  nomeX             Int?
-  nomeY             Int?
-  photoSize         Int?
-  photoX            Int?
-  photoY            Int?
-  telefoneX         Int?
-  telefoneY         Int?
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caminhoBackground    String?
+  criadoPor            String?
+  isAtual              Boolean  @default(true)
+  createdAt            DateTime @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime @default(now()) @db.Timestamp(6)
+  departamentoX        Int?
+  departamentoY        Int?
+  logoHeight           Int?
+  logoX                Int?
+  logoY                Int?
+  nomeX                Int?
+  nomeY                Int?
+  photoSize            Int?
+  photoX               Int?
+  photoY               Int?
+  telefoneX            Int?
+  telefoneY            Int?
+  departamentoCorFont  String?
+  departamentoFontSize String?
+  nomeCorFont          String?
+  nomeFontSize         String?
+  telefoneCorFont      String?
+  telefoneFontSize     String?
 }
 
 model Calendario {

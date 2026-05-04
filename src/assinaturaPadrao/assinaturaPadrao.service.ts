@@ -14,8 +14,14 @@ export class AssinaturaPadraoService {
 
     const caminhoBackground = `downloads/background-assinaturas/${file.filename}`;
 
-    const corFont = String(body.corFont || '').trim();
-    const fontSize = String(body.fontSize || '').trim();
+    const nomeCorFont = String(body.nomeCorFont || '').trim();
+    const nomeFontSize = String(body.nomeFontSize || '').trim();
+
+    const departamentoCorFont = String(body.departamentoCorFont || '').trim();
+    const departamentoFontSize = String(body.departamentoFontSize || '').trim();
+
+    const telefoneCorFont = String(body.telefoneCorFont || '').trim();
+    const telefoneFontSize = String(body.telefoneFontSize || '').trim();
 
     const photoX = Number(body.photoX);
     const photoY = Number(body.photoY);
@@ -34,12 +40,19 @@ export class AssinaturaPadraoService {
     const logoY = Number(body.logoY);
     const logoHeight = Number(body.logoHeight);
 
-    if (!corFont) {
-      throw new BadRequestException('corFont é obrigatória.');
-    }
+    const requiredTextFields = [
+      { name: 'nomeCorFont', value: nomeCorFont },
+      { name: 'nomeFontSize', value: nomeFontSize },
+      { name: 'departamentoCorFont', value: departamentoCorFont },
+      { name: 'departamentoFontSize', value: departamentoFontSize },
+      { name: 'telefoneCorFont', value: telefoneCorFont },
+      { name: 'telefoneFontSize', value: telefoneFontSize },
+    ];
 
-    if (!fontSize) {
-      throw new BadRequestException('fontSize é obrigatória.');
+    const emptyTextField = requiredTextFields.find((field) => !field.value);
+
+    if (emptyTextField) {
+      throw new BadRequestException(`${emptyTextField.name} é obrigatório.`);
     }
 
     const numericFields = [
@@ -75,8 +88,6 @@ export class AssinaturaPadraoService {
       this.prisma.assinaturaPadrao.create({
         data: {
           caminhoBackground,
-          corFont,
-          fontSize,
 
           photoX,
           photoY,
@@ -84,12 +95,19 @@ export class AssinaturaPadraoService {
 
           nomeX,
           nomeY,
+          nomeCorFont,
+          nomeFontSize,
 
           departamentoX,
           departamentoY,
 
+          departamentoCorFont,
+          departamentoFontSize,
+
           telefoneX,
           telefoneY,
+          telefoneCorFont,
+          telefoneFontSize,
 
           logoX,
           logoY,
