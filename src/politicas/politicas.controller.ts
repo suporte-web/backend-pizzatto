@@ -1,20 +1,30 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Patch,
   Post,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+
 import { AuthGuard } from '../auth/auth.guard';
+
 import { PoliticasService } from './politicas.service';
+
 import { ClientIp } from '../decorator/client-ip.decorator';
+
 import { User } from '../decorator/user.decorator';
+
 import { FileInterceptor } from '@nestjs/platform-express';
+
 import { diskStorage } from 'multer';
+
 import { extname } from 'path';
 
 @ApiTags('Politicas')
@@ -31,7 +41,10 @@ export class PoliticasController {
       storage: diskStorage({
         destination: './downloads/politicas',
         filename: (req, file, callback) => {
-          const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`;
+          const uniqueName = `${Date.now()}-${Math.round(
+            Math.random() * 1e9,
+          )}${extname(file.originalname)}`;
+
           callback(null, uniqueName);
         },
       }),
@@ -54,18 +67,30 @@ export class PoliticasController {
 
   @Patch('update')
   @ApiOperation({ summary: 'Atualiza as Politicas com base no ID passado' })
-  async update(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
+  async update(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
     return await this.politicasService.update(body, ip, user);
   }
 
+  @Delete('delete/:id')
+  @ApiOperation({ summary: 'Deleta Politica' })
+  async delete(
+    @Param('id') id: string,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.politicasService.delete(id, ip, user);
+  }
+
   @Get('find-politica-liberada-visualizacao')
-  @ApiOperation({ summary: 'Atualiza as Politicas com base no ID passado' })
   async findPoliticaLiberadaVisualizacao() {
     return await this.politicasService.findPoliticaLiberadaVisualizacao();
   }
 
   @Get('find-all-aceites-by-user')
-  @ApiOperation({ summary: 'Atualiza as Politicas com base no ID passado' })
   async findAllAceitesByUser(@User() user: any) {
     return await this.politicasService.findAllAceitesByUser(user);
   }

@@ -110,51 +110,35 @@ export class PlantaoService {
     }
   }
 
-  // async updateEscalas(body: any, ip: string, user: any): Promise<{ ok: true }> {
-  //   try {
-  //     const config = await this.ensureConfig();
-
-  //     await this.prisma.plantaoConfig.update({
-  //       where: { id: config.id },
-  //       data: {
-  //         escalaSistemas: body.escalaSistemas ?? escalaVazia(),
-  //         escalaInfra: body.escalaInfra ?? escalaVazia(),
-  //       },
-  //     });
-
-  //     await this.prisma.audit_logs.create({
-  //       data: {
-  //         acao: 'Atualizou a Escala de Plantão',
-  //         entidade: user?.name,
-  //         filialEntidade: user?.filial,
-  //         ipAddress: ip,
-  //       },
-  //     });
-
-  //     return { ok: true };
-  //   } catch (e) {
-  //     console.error('[PLANTAO] updateEscalas error:', e);
-  //     throw new InternalServerErrorException(
-  //       'Erro ao atualizar escalas do Plantão',
-  //     );
-  //   }
-  // }
-
   async getAllPlantonistas() {
-    return await this.prisma.plantaoContato.findMany();
+    return await this.prisma.plantaoContato.findMany({
+      orderBy: {
+        nome: 'asc',
+      },
+    });
   }
 
   async getAllEscalasAndHorarios() {
-    return await this.prisma.plantaoConfig.findFirst({
-      include: { PlantaoContato: true },
+    return await this.prisma.plantaoConfig.findMany({
+      include: {
+        PlantaoContato: true,
+      },
+      orderBy: [
+        {
+          dataJanela: 'asc',
+        },
+        {
+          diaSemana: 'asc',
+        },
+        {
+          janelaInicio: 'asc',
+        },
+      ],
     });
   }
 
   async getPlantonistasSemanaAtual() {
     try {
-      const inicioSemana = moment().startOf('week');
-      const fimSemana = moment().endOf('week');
-
       const diasSemana: Record<number, string> = {
         0: 'domingo',
         1: 'segunda',
@@ -165,34 +149,19 @@ export class PlantaoService {
         6: 'sabado',
       };
 
-      const plantoesSemana = await this.prisma.plantaoConfig.findMany({
-        where: {
-          OR: [
-            {
-              status: 'DATA FIXA',
-              dataJanela: {
-                gte: inicioSemana.format('YYYY-MM-DD'),
-                lte: fimSemana.format('YYYY-MM-DD'),
-              },
-            },
-            {
-              status: 'RECORRENTE',
-              diaSemana: {
-                in: [0, 1, 2, 3, 4, 5, 6],
-              },
-            },
-          ],
-        },
+      const plantoes = await this.prisma.plantaoConfig.findMany({
         include: {
           PlantaoContato: true,
         },
       });
 
-      const retorno = plantoesSemana.map((plantao) => {
+      const retorno = plantoes.map((plantao) => {
         const isRecorrente = plantao.status === 'RECORRENTE';
 
         const dataPlantao = isRecorrente
-          ? inicioSemana.clone().day(Number(plantao.diaSemana))
+          ? moment()
+              .startOf('isoWeek')
+              .day(Number(plantao.diaSemana))
           : moment(plantao.dataJanela, 'YYYY-MM-DD');
 
         const numeroDiaSemana = dataPlantao.day();
@@ -221,7 +190,7 @@ export class PlantaoService {
     } catch (e) {
       console.error('[PLANTAO] getPlantonistasSemanaAtual error:', e);
       throw new InternalServerErrorException(
-        'Erro ao buscar plantonistas da semana atual',
+        'Erro ao buscar plantonistas cadastrados',
       );
     }
   }
@@ -235,7 +204,7 @@ export class PlantaoService {
 
     const diaSemana = isRecorrente ? Number(body.diaSemana) : null;
 
-    if (isRecorrente && !diaSemana) {
+    if (isRecorrente && diaSemana === null) {
       throw new BadRequestException(
         'Dia da semana é obrigatório para recorrência',
       );
@@ -376,7 +345,7 @@ export class PlantaoService {
 
   async deleteContatos(id: string, ip: string, user: any) {
     const upd = await this.prisma.plantaoContato.delete({
-      where: { id: id },
+      where: { id },
     });
 
     await this.prisma.audit_logs.create({

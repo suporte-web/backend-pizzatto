@@ -1,13 +1,26 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+} from '@nestjs/common';
+
 import { PrismaService } from '../prisma/prisma.service';
+
+import * as fs from 'fs';
 
 @Injectable()
 export class PopService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(body: any, file: Express.Multer.File, ip: string, user: any) {
+  async create(
+    body: any,
+    file: Express.Multer.File,
+    ip: string,
+    user: any,
+  ) {
     if (!file) {
-      throw new BadRequestException('Arquivo do Pop é obrigatória.');
+      throw new BadRequestException(
+        'Arquivo do Pop é obrigatória.',
+      );
     }
 
     const create = await this.prisma.pops.create({
@@ -25,7 +38,7 @@ export class PopService {
 
     await this.prisma.audit_logs.create({
       data: {
-        acao: `Criou a Politica ${file.originalname}`,
+        acao: `Criou a POP ${file.originalname}`,
         entidade: user?.name,
         filialEntidade: user?.company,
         ipAddress: ip,
@@ -35,26 +48,44 @@ export class PopService {
     return create;
   }
 
-  // async create(body: any) {
-  //   const find = await this.prisma.pops.findFirst({
-  //     where: {
-  //       originalName: body.originalName,
-  //     },
-  //   });
+  async update(body: any) {
+    return await this.prisma.pops.update({
+      where: {
+        id: body.id,
+      },
 
-  //   if (find) {
-  //     return await this.prisma.pops.update({
-  //       where: {
-  //         id: find.id,
-  //       },
-  //       data: body,
-  //     });
-  //   }
+      data: {
+        originalName: body.originalName,
+        departamento: body.departamento,
+      },
+    });
+  }
 
-  //   return await this.prisma.pops.create({
-  //     data: body,
-  //   });
-  // }
+  async delete(id: string) {
+    const pop = await this.prisma.pops.findUnique({
+      where: { id },
+    });
+
+    if (!pop) {
+      throw new BadRequestException(
+        'POP não encontrada',
+      );
+    }
+
+    try {
+      if (pop.filePath && fs.existsSync(pop.filePath)) {
+        fs.unlinkSync(pop.filePath);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+
+    return await this.prisma.pops.delete({
+      where: {
+        id,
+      },
+    });
+  }
 
   async findById(id: string) {
     return await this.prisma.pops.findUnique({
@@ -65,7 +96,12 @@ export class PopService {
   }
 
   async findByFilter(body: any) {
-    const { nome, page = 1, limit = 10, departamento } = body;
+    const {
+      nome,
+      page = 1,
+      limit = 10,
+      departamento,
+    } = body;
 
     const skip = (page - 1) * limit;
 
@@ -83,8 +119,6 @@ export class PopService {
         contains: departamento,
         mode: 'insensitive',
       };
-    } else {
-      where.OR = [{ departamento: null }, { departamento: '' }];
     }
 
     const [result, total] = await Promise.all([
@@ -93,14 +127,18 @@ export class PopService {
         skip,
         take: limit,
         orderBy: {
-          originalName: 'asc',
+          createdAt: 'desc',
         },
       }),
+
       this.prisma.pops.count({
         where,
       }),
     ]);
 
-    return { result, total };
+    return {
+      result,
+      total,
+    };
   }
 }
