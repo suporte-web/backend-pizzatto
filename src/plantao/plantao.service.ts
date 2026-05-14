@@ -159,9 +159,7 @@ export class PlantaoService {
         const isRecorrente = plantao.status === 'RECORRENTE';
 
         const dataPlantao = isRecorrente
-          ? moment()
-              .startOf('isoWeek')
-              .day(Number(plantao.diaSemana))
+          ? moment().startOf('isoWeek').day(Number(plantao.diaSemana))
           : moment(plantao.dataJanela, 'YYYY-MM-DD');
 
         const numeroDiaSemana = dataPlantao.day();
@@ -356,5 +354,72 @@ export class PlantaoService {
         ipAddress: ip,
       },
     });
+
+    return upd;
+  }
+
+  async deletePlantao(id: string, ip: string, user: any) {
+    const del = await this.prisma.plantaoConfig.delete({
+      where: { id },
+    });
+
+    await this.prisma.audit_logs.create({
+      data: {
+        acao: `Deletou o Plantão Config ${del.id}`,
+        entidade: user?.name,
+        filialEntidade: user?.company,
+        ipAddress: ip,
+      },
+    });
+
+    return del;
+  }
+
+  async updatePlantao(body: any, ip: string, user: any) {
+    try {
+      if (!body.id) {
+        throw new BadRequestException('ID do plantão é obrigatório');
+      }
+
+      if (!body.plantonistaId) {
+        throw new BadRequestException('Plantonista é obrigatório');
+      }
+
+      if (!body.janelaInicio || !body.janelaFim) {
+        throw new BadRequestException(
+          'Janela início e janela fim são obrigatórias',
+        );
+      }
+
+      const update = await this.prisma.plantaoConfig.update({
+        where: {
+          id: body.id,
+        },
+        data: {
+          plantonistaId: body.plantonistaId,
+          janelaInicio: body.janelaInicio,
+          janelaFim: body.janelaFim,
+        },
+      });
+
+      await this.prisma.audit_logs.create({
+        data: {
+          acao: `Atualizou o Plantão Config ${update.id}`,
+          entidade: user?.name,
+          filialEntidade: user?.company,
+          ipAddress: ip,
+        },
+      });
+
+      return update;
+    } catch (e) {
+      console.error('[PLANTAO] updatePlantao error:', e);
+
+      if (e instanceof BadRequestException) {
+        throw e;
+      }
+
+      throw new InternalServerErrorException('Erro ao atualizar plantão');
+    }
   }
 }

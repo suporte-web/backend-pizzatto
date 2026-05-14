@@ -116,4 +116,26 @@ export class PlantaoController {
   ) {
     return await this.service.deleteContatos(id, ip, user);
   }
+
+  @UseGuards(AuthGuard)
+  @Delete('delete-plantao/:id')
+  @ApiOperation({ summary: 'Deleta a Configuração do plantonista' })
+  async deletePlantao(
+    @Param('id') id: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.service.deletePlantao(id, ip, user);
+  }
+
+  @UseGuards(AuthGuard)
+  @Put('update-plantao')
+  @ApiOperation({ summary: 'Atualiza o Plantão' })
+  async updatePlantao(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.service.updatePlantao(body, ip, user);
+  }
 }
