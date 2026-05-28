@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Patch,
   Post,
   UploadedFile,
   UseGuards,
@@ -60,5 +62,23 @@ export class AssinaturaPadraoController {
   })
   async findByFilter(@Body() body: any) {
     return await this.assinaturaPadraoService.findByFilter(body);
+  }
+
+  @Patch('update')
+  @ApiOperation({
+    summary:
+      'Atualiza a Assinatura com base nas informações passadas e pelo ID',
+  })
+  @UseInterceptors(FileInterceptor('background'))
+  async update(@Body() body: any, @UploadedFile() file?: Express.Multer.File) {
+    return await this.assinaturaPadraoService.update(body, file);
+  }
+
+  @Delete('delete')
+  @ApiOperation({
+    summary: 'Deleta a Assinatura com base no ID',
+  })
+  async delete(@Body() body: any) {
+    return await this.assinaturaPadraoService.delete(body);
   }
 }

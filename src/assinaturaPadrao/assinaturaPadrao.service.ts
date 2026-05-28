@@ -154,4 +154,79 @@ export class AssinaturaPadraoService {
       total,
     };
   }
+
+  async update(body: any, file?: Express.Multer.File) {
+    console.log(body);
+    
+    const id = body.id;
+
+    if (!id || Number.isNaN(id)) {
+      throw new BadRequestException('ID inválido.');
+    }
+
+    const data: any = {};
+
+    if (file) {
+      data.caminhoBackground = `downloads/background-assinaturas/${file.filename}`;
+    }
+
+    const textFields = [
+      'nomeCorFont',
+      'nomeFontSize',
+      'departamentoCorFont',
+      'departamentoFontSize',
+      'telefoneCorFont',
+      'telefoneFontSize',
+    ];
+
+    for (const field of textFields) {
+      if (body[field] !== undefined) {
+        const value = String(body[field]).trim();
+
+        if (!value) {
+          throw new BadRequestException(`${field} não pode ser vazio.`);
+        }
+
+        data[field] = value;
+      }
+    }
+
+    const numericFields = [
+      'photoX',
+      'photoY',
+      'photoSize',
+      'nomeX',
+      'nomeY',
+      'departamentoX',
+      'departamentoY',
+      'telefoneX',
+      'telefoneY',
+      'logoX',
+      'logoY',
+      'logoHeight',
+    ];
+
+    for (const field of numericFields) {
+      if (body[field] !== undefined) {
+        const value = Number(body[field]);
+
+        if (Number.isNaN(value)) {
+          throw new BadRequestException(`Campo numérico inválido: ${field}`);
+        }
+
+        data[field] = value;
+      }
+    }
+
+    return await this.prisma.assinaturaPadrao.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async delete(body: any) {
+    return await this.prisma.assinaturaPadrao.delete({
+      where: { id: body.id },
+    });
+  }
 }
