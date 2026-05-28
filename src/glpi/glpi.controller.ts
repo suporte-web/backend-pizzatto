@@ -49,6 +49,9 @@ export class GlpiController {
   }
 
   @Get('computers/:id')
+  @ApiOperation({
+    summary: 'Encontra as Maquinas pelo ID',
+  })
   async computerById(@Param('id') id: string) {
     return this.glpiService.getComputerByIdFull(Number(id));
   }

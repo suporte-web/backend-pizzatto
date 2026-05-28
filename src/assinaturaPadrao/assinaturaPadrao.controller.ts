@@ -27,6 +27,9 @@ export class AssinaturaPadraoController {
   ) {}
 
   @Post('create')
+  @ApiOperation({
+    summary: 'Cria a Assinatura Padrão',
+  })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileInterceptor('background', {

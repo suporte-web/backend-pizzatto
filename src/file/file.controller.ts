@@ -18,12 +18,16 @@ import {
   DownloadResponse,
   FileListResponse,
 } from './interface/fileResponse.interface';
+import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('files')
 export class FileController {
   constructor(private readonly fileService: FileService) {}
 
   @Post('upload')
+  @ApiOperation({
+    summary: 'Faz upload do File',
+  })
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
@@ -38,6 +42,9 @@ export class FileController {
   }
 
   @Post('upload-multiple')
+  @ApiOperation({
+    summary: 'Faz upload de multiplos Files',
+  })
   @UseInterceptors(FilesInterceptor('files', 10))
   async uploadMultipleFiles(
     @UploadedFiles() files: Array<Express.Multer.File>,
@@ -52,6 +59,9 @@ export class FileController {
   }
 
   @Post('convert/:folder/:filename')
+  @ApiOperation({
+    summary: 'Converte o File Word para PDF',
+  })
   async convertWordToPdf(
     @Param('filename') filename: string,
     @Param('folder') folder: string,
@@ -65,11 +75,17 @@ export class FileController {
   }
 
   @Get('convertible')
+  @ApiOperation({
+    summary: 'Lista Files com possibilidade de conversão',
+  })
   async listConvertibleFiles(@Query('folder') folder?: string) {
     return this.fileService.listConvertibleFiles(folder);
   }
 
   @Get('view-pdf/:folder/:filename')
+  @ApiOperation({
+    summary: 'Encontra o PDF',
+  })
   async viewWordAsPdf(
     @Param('filename') filename: string,
     @Param('folder') folder: string,
@@ -78,12 +94,10 @@ export class FileController {
     const result = await this.fileService.viewWordAsPdf(filename, folder);
 
     if (!result?.success || !result?.data) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: 'Arquivo não encontrado ou erro na conversão',
-        });
+      return res.status(404).json({
+        success: false,
+        message: 'Arquivo não encontrado ou erro na conversão',
+      });
     }
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -96,16 +110,25 @@ export class FileController {
   }
 
   @Get('list')
+  @ApiOperation({
+    summary: 'Lista os Files(arquivos)',
+  })
   async listFiles(@Query('folder') folder?: string): Promise<FileListResponse> {
     return this.fileService.listFiles(folder);
   }
 
   @Get('folders')
+  @ApiOperation({
+    summary: 'Lista as Folders(pastas)',
+  })
   async listFolders() {
     return this.fileService.listFolders();
   }
 
   @Get('view/:folder/:filename')
+  @ApiOperation({
+    summary: 'Ve um arquivo especifico na Folder',
+  })
   async viewFile(
     @Param('filename') filename: string,
     @Param('folder') folder: string,
@@ -139,6 +162,9 @@ export class FileController {
   }
 
   @Get('download/:filename')
+  @ApiOperation({
+    summary: 'Faz download do File',
+  })
   async downloadFile(
     @Param('filename') filename: string,
     @Res() res: Response,
@@ -167,6 +193,9 @@ export class FileController {
   }
 
   @Delete(':filename')
+  @ApiOperation({
+    summary: 'Deleta o File',
+  })
   async deleteFile(
     @Param('filename') filename: string,
     @Query('folder') folder?: string,
@@ -176,11 +205,17 @@ export class FileController {
   }
 
   @Post('folder/create')
+  @ApiOperation({
+    summary: 'Cria a Folder',
+  })
   async createFolder(@Body('folderName') folderName: string) {
     return this.fileService.createFolder(folderName);
   }
 
   @Delete('folder/:folderName')
+  @ApiOperation({
+    summary: 'Deleta o Folder pelo Nome',
+  })
   async deleteFolder(@Param('folderName') folderName: string) {
     return this.fileService.deleteFolder(folderName);
   }

@@ -75,16 +75,25 @@ export class PopController {
   }
 
   @Post('find-by-filter')
+  @ApiOperation({
+    summary: 'Encontra as POPs filtrando',
+  })
   async findByFilter(@Body() body: any) {
     return await this.popService.findByFilter(body);
   }
 
   @Patch('update')
+  @ApiOperation({
+    summary: 'Atualiza a POP com base no ID',
+  })
   async update(@Body() body: any) {
     return await this.popService.update(body);
   }
 
   @Delete('delete/:id')
+  @ApiOperation({
+    summary: 'Deleta a POP com base no ID',
+  })
   async delete(@Param('id') id: string) {
     return await this.popService.delete(id);
   }

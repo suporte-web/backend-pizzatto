@@ -26,6 +26,9 @@ export class PaginaInstitucionalController {
   ) {}
 
   @Post('create')
+  @ApiOperation({
+    summary: 'Cria a Página Institucional',
+  })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FilesInterceptor('imagens', 10, {

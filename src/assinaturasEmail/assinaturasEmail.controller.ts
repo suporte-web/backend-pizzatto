@@ -26,6 +26,9 @@ export class AssinaturasEmailController {
   ) {}
 
   @Post('create')
+  @ApiOperation({
+    summary: 'Cria a Assinatura de E-mail',
+  })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileInterceptor('foto', {

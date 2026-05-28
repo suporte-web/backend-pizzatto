@@ -15,7 +15,7 @@ import { User } from '@/decorator/user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { extname } from 'path';
 
-@ApiTags('BibliotecaMarca')
+@ApiTags('Biblioteca-Marca')
 @Controller('biblioteca-marca')
 @UseGuards(AuthGuard)
 export class BibliotecaMarcaController {

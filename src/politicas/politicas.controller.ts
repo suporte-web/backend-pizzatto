@@ -67,11 +67,7 @@ export class PoliticasController {
 
   @Patch('update')
   @ApiOperation({ summary: 'Atualiza as Politicas com base no ID passado' })
-  async update(
-    @Body() body: any,
-    @ClientIp() ip: string,
-    @User() user: any,
-  ) {
+  async update(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
     return await this.politicasService.update(body, ip, user);
   }
 
@@ -86,11 +82,17 @@ export class PoliticasController {
   }
 
   @Get('find-politica-liberada-visualizacao')
+  @ApiOperation({
+    summary: 'Encontra a Politica que a Visualização está liberada',
+  })
   async findPoliticaLiberadaVisualizacao() {
     return await this.politicasService.findPoliticaLiberadaVisualizacao();
   }
 
   @Get('find-all-aceites-by-user')
+  @ApiOperation({
+    summary: 'Encontra os Aceites da Politica pelo usuario logado',
+  })
   async findAllAceitesByUser(@User() user: any) {
     return await this.politicasService.findAllAceitesByUser(user);
   }
