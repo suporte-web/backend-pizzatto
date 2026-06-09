@@ -1,5 +1,6 @@
 import { PrismaService } from '@/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
+import { log } from 'node:console';
 
 @Injectable()
 export class PaginaInstitucionalService {
@@ -40,6 +41,10 @@ export class PaginaInstitucionalService {
   async findByFilter(body: any) {
     const where: any = {};
 
+    if (body.status === true || body.status === 'true') {
+      where.status = true;
+    }
+
     if (body.pesquisa) {
       where.OR = [
         {
@@ -60,6 +65,7 @@ export class PaginaInstitucionalService {
     const result = await this.prisma.paginaInstitucional.findMany({
       where,
     });
+
     const total = await this.prisma.paginaInstitucional.count({
       where,
     });
@@ -73,7 +79,6 @@ export class PaginaInstitucionalService {
     ip: string,
     user: any,
   ) {
-    
     const { imagensAtuais, ...restoBody } = body;
 
     const novasImagens =
@@ -110,6 +115,24 @@ export class PaginaInstitucionalService {
     await this.prisma.audit_logs.create({
       data: {
         acao: `Atualizou as Informações na Página Institucional ${upd.titulo}`,
+        entidade: user?.name,
+        filialEntidade: user?.company,
+        ipAddress: ip,
+      },
+    });
+
+    return upd;
+  }
+
+  async ativarInativarPagina(body: any, ip: string, user: any) {
+    const upd = await this.prisma.paginaInstitucional.update({
+      where: { id: body.id },
+      data: { status: body.status },
+    });
+
+    await this.prisma.audit_logs.create({
+      data: {
+        acao: `${body.status === true ? 'Ativou' : 'Inativou'} as Informações na Página Institucional ${upd.titulo}`,
         entidade: user?.name,
         filialEntidade: user?.company,
         ipAddress: ip,

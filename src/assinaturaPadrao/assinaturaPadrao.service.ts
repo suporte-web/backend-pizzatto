@@ -146,9 +146,9 @@ export class AssinaturaPadraoService {
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.assinatura.count(),
+      this.prisma.assinaturaPadrao.count(),
     ]);
-
+    
     return {
       result,
       total,

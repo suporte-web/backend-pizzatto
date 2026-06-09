@@ -92,4 +92,20 @@ export class PaginaInstitucionalController {
       user,
     );
   }
+
+  @Patch('activate-inactivate-page')
+  @ApiOperation({
+    summary: 'Atualiza o status da Página Institucional com base no id',
+  })
+  async ativarInativarPagina(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.paginaInstitucionalService.ativarInativarPagina(
+      body,
+      ip,
+      user,
+    );
+  }
 }
