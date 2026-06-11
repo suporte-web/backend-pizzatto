@@ -108,6 +108,13 @@ model PlantaoConfig {
   plantonistaId  String?         @db.Uuid
   status         String
   diaSemana      Int?
+
+  inicioPlantao  DateTime?
+  fimPlantao     DateTime?
+
+  deletedAt      DateTime?
+  deletedBy      String?
+  
   PlantaoContato PlantaoContato? @relation(fields: [plantonistaId], references: [id])
 }
 
