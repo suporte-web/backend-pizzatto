@@ -47,20 +47,25 @@ model InventarioImpressoras {
 }
 
 model Mural {
-  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   titulo              String
   mensagem            String
   caminhoImagem       String?
   filiais             String[]
-  createdAt           DateTime          @default(now()) @db.Timestamp(6)
-  updatedAt           DateTime          @default(now()) @db.Timestamp(6)
-  ativo               Boolean           @default(true)
+  createdAt           DateTime           @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime           @default(now()) @db.Timestamp(6)
+  ativo               Boolean            @default(true)
   validoAte           String?
   criadoPor           String
-  importante          Boolean           @default(false)
+  importante          Boolean            @default(false)
   departamentoCriador String?
+  tipoMidia           String?
+  youtubeId           String?
+  youtubeUrl          String?
+  blur                Boolean            @default(false)
   MuralComentario     MuralComentario[]
   MuralLike           MuralLike[]
+  MuralVisualizado    MuralVisualizado[]
 }
 
 model Pops {
@@ -108,13 +113,10 @@ model PlantaoConfig {
   plantonistaId  String?         @db.Uuid
   status         String
   diaSemana      Int?
-
-  inicioPlantao  DateTime?
-  fimPlantao     DateTime?
-
   deletedAt      DateTime?
   deletedBy      String?
-  
+  fimPlantao     DateTime?
+  inicioPlantao  DateTime?
   PlantaoContato PlantaoContato? @relation(fields: [plantonistaId], references: [id])
 }
 
@@ -310,12 +312,167 @@ model UsuarioChat {
   createdAt            DateTime               @default(now()) @db.Timestamp(6)
   updatedAt            DateTime               @default(now()) @db.Timestamp(6)
   Conversa             Conversa[]
+  DashboardAcesso      DashboardAcesso[]
   Mensagem             Mensagem[]
   ParticipanteConversa ParticipanteConversa[]
 
   @@index([email])
   @@index([nome])
   @@index([usuario])
+}
+
+model DashboardAcesso {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid String
+  usuario      String?
+  nome         String?
+  email        String?
+  departamento String?
+  empresa      String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime    @default(now()) @db.Timestamp(6)
+  UsuarioChat  UsuarioChat @relation(fields: [adObjectGuid], references: [adObjectGuid])
+
+  @@index([adObjectGuid])
+  @@index([createdAt])
+}
+
+model LinksAcesso {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo    String
+  descricao String
+  tipoLink  String
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @db.Timestamp(6)
+  link      String
+}
+
+model Missao {
+  id                    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo                String
+  descricao             String       @default("")
+  tipo                  TipoMissao
+  status                StatusMissao @default(RASCUNHO)
+  pontos                Int          @default(10)
+  minimoEvidencias      Int          @default(1)
+  observacaoObrigatoria Boolean      @default(false)
+  expiraEm              DateTime     @db.Timestamp(6)
+  agendadaPara          DateTime?    @db.Timestamp(6)
+  criadoPor             String?
+  criadoPorSam          String?
+  criadoPorAdObjectGuid String?
+  preRequisitoMissaoId  String?      @db.Uuid
+  createdAt             DateTime     @default(now()) @db.Timestamp(6)
+  updatedAt             DateTime     @default(now()) @db.Timestamp(6)
+  linkAcesso            String?
+  Missao                Missao?      @relation("MissaoToMissao", fields: [preRequisitoMissaoId], references: [id])
+  other_Missao          Missao[]     @relation("MissaoToMissao")
+  Submissao             Submissao[]
+
+  @@index([agendadaPara])
+  @@index([preRequisitoMissaoId])
+  @@index([status, expiraEm])
+  @@index([tipo])
+}
+
+model MuralVisualizado {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  muralId      String   @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  adObjectGuid String?  @unique
+  name         String?
+  Mural        Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
+}
+
+model Submissao {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  missaoId            String                @db.Uuid
+  usuarioAdObjectGuid String
+  usuarioSam          String?
+  usuarioNome         String?
+  observacao          String                @default("")
+  status              StatusSubmissao       @default(APROVADA)
+  enviadaEm           DateTime              @default(now()) @db.Timestamp(6)
+  revisadaPor         String?
+  motivoRevisao       String?
+  revisadaEm          DateTime?             @db.Timestamp(6)
+  createdAt           DateTime              @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime              @default(now()) @db.Timestamp(6)
+  Missao              Missao                @relation(fields: [missaoId], references: [id], onDelete: Cascade)
+  SubmissaoComentario SubmissaoComentario[]
+  SubmissaoDenuncia   SubmissaoDenuncia[]
+  SubmissaoFoto       SubmissaoFoto[]
+  SubmissaoReacao     SubmissaoReacao[]
+
+  @@index([enviadaEm])
+  @@index([missaoId, status])
+  @@index([usuarioAdObjectGuid, status])
+}
+
+model SubmissaoComentario {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissaoId         String    @db.Uuid
+  usuarioAdObjectGuid String
+  usuarioSam          String?
+  usuarioNome         String?
+  comentario          String
+  deletedAt           DateTime? @db.Timestamp(6)
+  createdAt           DateTime  @default(now()) @db.Timestamp(6)
+  Submissao           Submissao @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+
+  @@index([submissaoId, createdAt])
+  @@index([usuarioAdObjectGuid])
+}
+
+model SubmissaoDenuncia {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissaoId         String    @db.Uuid
+  usuarioAdObjectGuid String
+  usuarioSam          String?
+  usuarioNome         String?
+  motivo              String
+  detalhes            String?
+  resolvidaPor        String?
+  resolvidaPorSam     String?
+  resolvidaEm         DateTime? @db.Timestamp(6)
+  createdAt           DateTime  @default(now()) @db.Timestamp(6)
+  Submissao           Submissao @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+
+  @@unique([submissaoId, usuarioAdObjectGuid])
+  @@index([createdAt])
+  @@index([submissaoId, resolvidaEm])
+}
+
+model SubmissaoFoto {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissaoId    String    @db.Uuid
+  caminhoArquivo String
+  nomeArquivo    String
+  originalName   String?
+  mimetype       String?
+  tamanhoBytes   Int?
+  posicao        Int       @default(0)
+  createdAt      DateTime  @default(now()) @db.Timestamp(6)
+  Submissao      Submissao @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+
+  @@index([submissaoId])
+}
+
+model SubmissaoReacao {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissaoId         String    @db.Uuid
+  usuarioAdObjectGuid String
+  usuarioSam          String?
+  usuarioNome         String?
+  emoji               String
+  createdAt           DateTime  @default(now()) @db.Timestamp(6)
+  Submissao           Submissao @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+
+  @@unique([submissaoId, usuarioAdObjectGuid, emoji])
+  @@index([submissaoId])
+  @@index([usuarioAdObjectGuid])
 }
 
 enum Area {
@@ -332,4 +489,24 @@ enum TipoMensagem {
   TEXTO
   IMAGEM
   ARQUIVO
+}
+
+enum StatusMissao {
+  RASCUNHO
+  PUBLICADA
+  ENCERRADA
+  ARQUIVADA
+}
+
+enum StatusSubmissao {
+  APROVADA
+  REPROVADA
+  EXCLUIDA
+  PENDENTE
+}
+
+enum TipoMissao {
+  UNICA
+  DIARIA
+  SEMANAL
 }
