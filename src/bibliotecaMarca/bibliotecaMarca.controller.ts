@@ -2,8 +2,12 @@ import { AuthGuard } from '@/auth/auth.guard';
 import {
   Body,
   Controller,
+  Get,
+  Param,
+  Patch,
   Post,
-  UploadedFile,
+  Res,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -12,8 +16,9 @@ import { BibliotecaMarcaService } from './bibliotecaMarca.service';
 import { diskStorage } from 'multer';
 import { ClientIp } from '@/decorator/client-ip.decorator';
 import { User } from '@/decorator/user.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { extname } from 'path';
+import type { Response } from 'express';
 
 @ApiTags('Biblioteca-Marca')
 @Controller('biblioteca-marca')
@@ -29,7 +34,7 @@ export class BibliotecaMarcaController {
   })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
-    FileInterceptor('arquivo', {
+    FilesInterceptor('arquivo', 10, {
       storage: diskStorage({
         destination: './downloads/arquivo-biblioteca',
         filename: (req, file, callback) => {
@@ -41,7 +46,7 @@ export class BibliotecaMarcaController {
   )
   async create(
     @Body() body: any,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() file: Express.Multer.File[],
     @ClientIp() ip: string,
     @User() user: any,
   ) {
@@ -54,5 +59,21 @@ export class BibliotecaMarcaController {
   })
   async findByFilter(@Body() body: any) {
     return await this.bibliotecaMarcaService.findByFilter(body);
+  }
+
+  @Get('download/:nomeArquivo')
+  downloadArquivo(
+    @Param('nomeArquivo') nomeArquivo: string,
+    @Res() res: Response,
+  ) {
+    return res.download(`./downloads/arquivo-biblioteca/${nomeArquivo}`);
+  }
+
+  @Patch('update')
+  @ApiOperation({
+    summary: 'Atualiza as informações da Biblioteca Marca',
+  })
+  async update(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
+    return await this.bibliotecaMarcaService.update(body, ip, user);
   }
 }

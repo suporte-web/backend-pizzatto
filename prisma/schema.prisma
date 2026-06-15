@@ -236,11 +236,11 @@ model PaginaInstitucional {
 model BibliotecaMarca {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome           String
-  caminhoArquivo String?
   status         Boolean  @default(true)
   descricao      String
   createdAt      DateTime @default(now()) @db.Timestamp(6)
   updatedAt      DateTime @default(now()) @db.Timestamp(6)
+  caminhoArquivo String[]
 }
 
 model Conversa {
@@ -322,20 +322,23 @@ model UsuarioChat {
 }
 
 model DashboardAcesso {
-  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  adObjectGuid String
-  usuario      String?
-  nome         String?
-  email        String?
-  departamento String?
-  empresa      String?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime    @default(now()) @db.Timestamp(6)
-  UsuarioChat  UsuarioChat @relation(fields: [adObjectGuid], references: [adObjectGuid])
+  id                      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid            String
+  usuario                 String?
+  nome                    String?
+  email                   String?
+  departamento            String?
+  empresa                 String?
+  ipAddress               String?
+  userAgent               String?
+  createdAt               DateTime    @default(now()) @db.Timestamp(6)
+  dataHoraSaida           DateTime?   @db.Timestamp(6)
+  dataHoraUltimaAtividade DateTime?   @db.Timestamp(6)
+  UsuarioChat             UsuarioChat @relation(fields: [adObjectGuid], references: [adObjectGuid])
 
   @@index([adObjectGuid])
   @@index([createdAt])
+  @@index([dataHoraUltimaAtividade])
 }
 
 model LinksAcesso {
