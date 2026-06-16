@@ -56,6 +56,9 @@ export class BibliotecaMarcaService {
 
     const result = await this.prisma.bibliotecaMarca.findMany({
       where,
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
     const total = await this.prisma.bibliotecaMarca.count({
       where,
@@ -64,12 +67,27 @@ export class BibliotecaMarcaService {
     return { result, total };
   }
 
-  async update(body: any, ip: string, user: any) {
+  async update(body: any, files: Express.Multer.File[], ip: string, user: any) {
+    const arquivosExistentes = Array.isArray(body.arquivosExistentes)
+      ? body.arquivosExistentes
+      : body.arquivosExistentes
+        ? [body.arquivosExistentes]
+        : [];
+
+    const novosArquivos =
+      files?.map((file) => `/uploads/biblioteca-marca/${file.filename}`) || [];
+
+    const caminhoArquivo = [...arquivosExistentes, ...novosArquivos];
+
     const upd = await this.prisma.bibliotecaMarca.update({
       where: {
         id: body.id,
       },
-      data: body,
+      data: {
+        nome: body.nome,
+        descricao: body.descricao,
+        caminhoArquivo,
+      },
     });
 
     await this.prisma.audit_logs.create({

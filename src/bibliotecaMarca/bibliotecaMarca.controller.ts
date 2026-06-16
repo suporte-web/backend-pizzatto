@@ -70,10 +70,13 @@ export class BibliotecaMarcaController {
   }
 
   @Patch('update')
-  @ApiOperation({
-    summary: 'Atualiza as informações da Biblioteca Marca',
-  })
-  async update(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
-    return await this.bibliotecaMarcaService.update(body, ip, user);
+  @UseInterceptors(FilesInterceptor('files'))
+  async update(
+    @Body() body: any,
+    @UploadedFiles() files: Express.Multer.File[],
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return this.bibliotecaMarcaService.update(body, files, ip, user);
   }
 }
