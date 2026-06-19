@@ -198,25 +198,27 @@ model Politicas {
 }
 
 model MuralComentario {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  muralId    String   @db.Uuid
-  codigo     String
-  nome       String
-  comentario String
-  createdAt  DateTime @default(now()) @db.Timestamp(6)
-  updatedAt  DateTime @default(now()) @db.Timestamp(6)
-  Mural      Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  muralId      String   @db.Uuid
+  codigo       String
+  nome         String
+  comentario   String
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime @default(now()) @db.Timestamp(6)
+  adObjectGuid String?
+  Mural        Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
 
   @@index([muralId])
 }
 
 model MuralLike {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  muralId   String   @db.Uuid
-  codigo    String
-  nome      String
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  Mural     Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  muralId      String   @db.Uuid
+  codigo       String
+  nome         String
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  adObjectGuid String?
+  Mural        Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
 
   @@unique([muralId, codigo])
   @@index([muralId])
@@ -384,8 +386,9 @@ model MuralVisualizado {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   muralId      String   @db.Uuid
   createdAt    DateTime @default(now()) @db.Timestamp(6)
-  adObjectGuid String?  @unique
-  name         String?
+  adObjectGuid String?
+  codigo       String?
+  nome         String?
   Mural        Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
 }
 

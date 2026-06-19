@@ -6,8 +6,6 @@ export class BibliotecaMarcaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(body: any, files: Express.Multer.File[], ip: string, user: any) {
-    console.log(body);
-
     const caminhosArquivo =
       files?.map((img) => `/downloads/arquivo-biblioteca/${img.filename}`) ||
       [];

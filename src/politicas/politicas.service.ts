@@ -52,6 +52,10 @@ export class PoliticasService {
   async findByFilter(body: any) {
     const where: any = {};
 
+    if (body.ativo === true || body.ativo === 'true') {
+      where.ativo = true;
+    }
+
     if (body.pesquisa) {
       where.OR = [
         {
