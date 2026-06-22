@@ -70,7 +70,21 @@ export class BibliotecaMarcaController {
   }
 
   @Patch('update')
-  @UseInterceptors(FilesInterceptor('files'))
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: diskStorage({
+        destination: './downloads/arquivo-biblioteca',
+        filename: (req, file, callback) => {
+          const uniqueName = `${Date.now()}-${Math.round(
+            Math.random() * 1e9,
+          )}${extname(file.originalname)}`;
+
+          callback(null, uniqueName);
+        },
+      }),
+    }),
+  )
   async update(
     @Body() body: any,
     @UploadedFiles() files: Express.Multer.File[],

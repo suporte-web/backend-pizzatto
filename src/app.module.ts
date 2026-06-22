@@ -17,6 +17,7 @@ import { PoliticasModule } from './politicas/politicas.module';
 import { PoliticasAceitesModule } from './politicaAceites/politicaAceites.module';
 import { PaginaInstitucionalModule } from './paginaInstitucional/paginaInstitucional.module';
 import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module';
+import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInterno.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module'
     PoliticasAceitesModule,
     PaginaInstitucionalModule,
     BibliotecaMarcaModule,
+    RecrutamentoInternoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

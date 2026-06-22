@@ -1,6 +1,5 @@
 import { PrismaService } from '@/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
-import { log } from 'node:console';
 
 @Injectable()
 export class PaginaInstitucionalService {
@@ -12,16 +11,20 @@ export class PaginaInstitucionalService {
     ip: string,
     user: any,
   ) {
-    const caminhosImagem =
-      imagens?.map(
-        (img) => `/downloads/imagens-pagina-institucional/${img.filename}`,
-      ) || [];
+    const arquivos =
+      imagens?.map((img) => ({
+        nomeOriginal: img.originalname,
+        nomeSalvo: img.filename,
+        caminho: `/downloads/imagens-pagina-institucional/${img.filename}`,
+        mimeType: img.mimetype,
+        tamanho: img.size,
+      })) || [];
 
     const create = await this.prisma.paginaInstitucional.create({
       data: {
         titulo: body.titulo,
         descricao: body.descricao,
-        caminhoImagem: caminhosImagem,
+        arquivos,
         dataAtualizacao: new Date().toISOString(),
       },
     });
@@ -79,36 +82,46 @@ export class PaginaInstitucionalService {
     ip: string,
     user: any,
   ) {
-    const { imagensAtuais, ...restoBody } = body;
+    const { id, titulo, descricao, imagensAtuais } = body;
 
-    const novasImagens =
-      imagens?.map(
-        (img) => `/downloads/imagens-pagina-institucional/${img.filename}`,
-      ) || [];
+    const novosArquivos: any[] =
+      imagens?.map((img) => ({
+        nomeOriginal: img.originalname,
+        nomeSalvo: img.filename,
+        caminho: `/downloads/imagens-pagina-institucional/${img.filename}`,
+        mimeType: img.mimetype,
+        tamanho: img.size,
+      })) || [];
 
     const paginaAtual = await this.prisma.paginaInstitucional.findUnique({
-      where: { id: body.id },
+      where: { id },
     });
 
     if (!paginaAtual) {
       throw new Error('Página institucional não encontrada');
     }
 
-    let caminhoImagemFinal = paginaAtual.caminhoImagem || [];
+    let arquivosAtuais: any[] = [];
 
     if (Array.isArray(imagensAtuais)) {
-      // quando o front mandar as imagens restantes após exclusão
-      caminhoImagemFinal = [...imagensAtuais, ...novasImagens];
-    } else if (novasImagens.length > 0) {
-      // quando apenas adicionar novas imagens sem excluir antigas
-      caminhoImagemFinal = [...caminhoImagemFinal, ...novasImagens];
+      arquivosAtuais = imagensAtuais.map((item) => JSON.parse(item));
+    } else if (imagensAtuais) {
+      arquivosAtuais = [JSON.parse(imagensAtuais)];
+    } else {
+      arquivosAtuais = (paginaAtual.arquivos || []).filter(
+        (item) => item !== null,
+      );
     }
 
+    const arquivosFinal = [...arquivosAtuais, ...novosArquivos];
+
     const upd = await this.prisma.paginaInstitucional.update({
-      where: { id: body.id },
+      where: { id },
       data: {
-        ...restoBody,
-        caminhoImagem: caminhoImagemFinal,
+        titulo,
+        descricao,
+        arquivos: arquivosFinal as any,
+        dataAtualizacao: new Date().toISOString(),
       },
     });
 

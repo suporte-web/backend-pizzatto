@@ -1,19 +1,24 @@
 import { PrismaService } from '@/prisma/prisma.service';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class BibliotecaMarcaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(body: any, files: Express.Multer.File[], ip: string, user: any) {
-    const caminhosArquivo =
-      files?.map((img) => `/downloads/arquivo-biblioteca/${img.filename}`) ||
-      [];
+    const arquivos =
+      files?.map((file) => ({
+        nomeOriginal: file.originalname,
+        nomeSalvo: file.filename,
+        caminho: `/downloads/arquivo-biblioteca/${file.filename}`,
+        mimeType: file.mimetype,
+        tamanho: file.size,
+      })) || [];
 
     const create = await this.prisma.bibliotecaMarca.create({
       data: {
         nome: body.nome,
-        caminhoArquivo: caminhosArquivo,
+        arquivos,
         descricao: body.descricao,
       },
     });
@@ -26,6 +31,8 @@ export class BibliotecaMarcaService {
         ipAddress: ip,
       },
     });
+
+    return create;
   }
 
   async findByFilter(body: any) {
@@ -58,6 +65,7 @@ export class BibliotecaMarcaService {
         createdAt: 'desc',
       },
     });
+
     const total = await this.prisma.bibliotecaMarca.count({
       where,
     });
@@ -67,15 +75,21 @@ export class BibliotecaMarcaService {
 
   async update(body: any, files: Express.Multer.File[], ip: string, user: any) {
     const arquivosExistentes = Array.isArray(body.arquivosExistentes)
-      ? body.arquivosExistentes
+      ? body.arquivosExistentes.map((item) => JSON.parse(item))
       : body.arquivosExistentes
-        ? [body.arquivosExistentes]
+        ? [JSON.parse(body.arquivosExistentes)]
         : [];
 
     const novosArquivos =
-      files?.map((file) => `/uploads/biblioteca-marca/${file.filename}`) || [];
+      files?.map((file) => ({
+        nomeOriginal: file.originalname,
+        nomeSalvo: file.filename,
+        caminho: `/downloads/arquivo-biblioteca/${file.filename}`,
+        mimeType: file.mimetype,
+        tamanho: file.size,
+      })) || [];
 
-    const caminhoArquivo = [...arquivosExistentes, ...novosArquivos];
+    const arquivos = [...arquivosExistentes, ...novosArquivos];
 
     const upd = await this.prisma.bibliotecaMarca.update({
       where: {
@@ -84,7 +98,7 @@ export class BibliotecaMarcaService {
       data: {
         nome: body.nome,
         descricao: body.descricao,
-        caminhoArquivo,
+        arquivos,
       },
     });
 

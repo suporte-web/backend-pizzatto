@@ -228,21 +228,21 @@ model PaginaInstitucional {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   titulo          String
   descricao       String
-  caminhoImagem   String[]
   dataAtualizacao String
   createdAt       DateTime @default(now()) @db.Timestamp(6)
   updatedAt       DateTime @default(now()) @db.Timestamp(6)
   status          Boolean  @default(true)
+  arquivos        Json[]   @default([])
 }
 
 model BibliotecaMarca {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nome           String
-  status         Boolean  @default(true)
-  descricao      String
-  createdAt      DateTime @default(now()) @db.Timestamp(6)
-  updatedAt      DateTime @default(now()) @db.Timestamp(6)
-  caminhoArquivo String[]
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String
+  status    Boolean  @default(true)
+  descricao String
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @db.Timestamp(6)
+  arquivos  Json[]   @default([])
 }
 
 model Conversa {
@@ -479,6 +479,40 @@ model SubmissaoReacao {
   @@unique([submissaoId, usuarioAdObjectGuid, emoji])
   @@index([submissaoId])
   @@index([usuarioAdObjectGuid])
+}
+
+model RecrutamentoInterno {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vaga                         String
+  descricao                    String?
+  requisitos                   String?
+  diferenciais                 String?
+  departamento                 String?
+  filial                       String?
+  modalidade                   String?
+  senioridade                  String?
+  quantidadeVagas              Int?                           @default(1)
+  dataLimite                   DateTime?
+  dataInicio                   DateTime?
+  gestorResponsavel            String?
+  emailContato                 String?
+  ativo                        Boolean                        @default(true)
+  createdAt                    DateTime                       @default(now()) @db.Timestamp(6)
+  updatedAt                    DateTime                       @default(now()) @db.Timestamp(6)
+  RecrutamentoInternoCandidato RecrutamentoInternoCandidato[]
+}
+
+model RecrutamentoInternoCandidato {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recrutamentoId      String              @db.Uuid
+  colaboradorId       String              @db.Uuid
+  observacao          String?
+  status              String              @default("PENDENTE")
+  createdAt           DateTime            @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime            @default(now()) @db.Timestamp(6)
+  RecrutamentoInterno RecrutamentoInterno @relation(fields: [recrutamentoId], references: [id])
+
+  @@unique([recrutamentoId, colaboradorId])
 }
 
 enum Area {
