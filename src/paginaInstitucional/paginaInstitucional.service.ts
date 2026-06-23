@@ -1,6 +1,10 @@
 import { PrismaService } from '@/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
+export function fixFileName(name: string) {
+  return Buffer.from(name, 'latin1').toString('utf8').normalize('NFC');
+}
+
 @Injectable()
 export class PaginaInstitucionalService {
   constructor(private readonly prisma: PrismaService) {}
@@ -13,7 +17,7 @@ export class PaginaInstitucionalService {
   ) {
     const arquivos =
       imagens?.map((img) => ({
-        nomeOriginal: img.originalname,
+        nomeOriginal: fixFileName(img.originalname),
         nomeSalvo: img.filename,
         caminho: `/downloads/imagens-pagina-institucional/${img.filename}`,
         mimeType: img.mimetype,
@@ -86,7 +90,7 @@ export class PaginaInstitucionalService {
 
     const novosArquivos: any[] =
       imagens?.map((img) => ({
-        nomeOriginal: img.originalname,
+        nomeOriginal: fixFileName(img.originalname),
         nomeSalvo: img.filename,
         caminho: `/downloads/imagens-pagina-institucional/${img.filename}`,
         mimeType: img.mimetype,
