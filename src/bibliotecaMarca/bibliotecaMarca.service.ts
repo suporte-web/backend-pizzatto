@@ -1,6 +1,10 @@
 import { PrismaService } from '@/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 
+export function fixFileName(name: string) {
+  return Buffer.from(name, 'latin1').toString('utf8').normalize('NFC');
+}
+
 @Injectable()
 export class BibliotecaMarcaService {
   constructor(private readonly prisma: PrismaService) {}
@@ -8,7 +12,7 @@ export class BibliotecaMarcaService {
   async create(body: any, files: Express.Multer.File[], ip: string, user: any) {
     const arquivos =
       files?.map((file) => ({
-        nomeOriginal: file.originalname,
+        nomeOriginal: fixFileName(file.originalname),
         nomeSalvo: file.filename,
         caminho: `/downloads/arquivo-biblioteca/${file.filename}`,
         mimeType: file.mimetype,
@@ -82,7 +86,7 @@ export class BibliotecaMarcaService {
 
     const novosArquivos =
       files?.map((file) => ({
-        nomeOriginal: file.originalname,
+        nomeOriginal: fixFileName(file.originalname),
         nomeSalvo: file.filename,
         caminho: `/downloads/arquivo-biblioteca/${file.filename}`,
         mimeType: file.mimetype,
