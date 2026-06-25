@@ -11,6 +11,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@/auth/auth.guard';
 
 import { RecrutamentoInternoService } from './recrutamentoInterno.service';
+import { ClientIp } from '@/decorator/client-ip.decorator';
+import { User } from '@/decorator/user.decorator';
 
 @ApiTags('Recrutamento Interno')
 @Controller('recrutamento-interno')
@@ -24,12 +26,13 @@ export class RecrutamentoInternoController {
   @ApiOperation({ summary: 'Cria o Recrutamento Interno' })
   async create(
     @Body() body: any,
-    @Req() req: any,
+    @ClientIp() ip: string,
+        @User() user: any,
   ) {
     return await this.recrutamentoInternoService.create(
       body,
-      req.ip,
-      req.user,
+      ip,
+      user,
     );
   }
 
@@ -45,12 +48,13 @@ export class RecrutamentoInternoController {
   @ApiOperation({ summary: 'Atualiza o Recrutamento Interno com base no ID passado' })
   async update(
     @Body() body: any,
-    @Req() req: any,
+    @ClientIp() ip: string,
+    @User() user: any,
   ) {
     return await this.recrutamentoInternoService.update(
       body,
-      req.ip,
-      req.user,
+      ip,
+      user,
     );
   }
 }

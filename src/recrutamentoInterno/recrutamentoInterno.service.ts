@@ -48,6 +48,11 @@ export class RecrutamentoInternoService {
   }
 
   async findByFilter(body: any) {
+    const page = Number(body?.page) > 0 ? Number(body.page) : 1;
+    const limit = Number(body?.limit) > 0 ? Number(body.limit) : 10;
+
+    const skip = (page - 1) * limit;
+    
     const where: any = {};
 
     if (body.ativo === true || body.ativo === 'true') {
@@ -141,6 +146,7 @@ export class RecrutamentoInternoService {
 
     const result = await this.prisma.recrutamentoInterno.findMany({
       where,
+      skip,
       include: {
         RecrutamentoInternoCandidato: true,
       },

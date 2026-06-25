@@ -18,6 +18,7 @@ import { PoliticasAceitesModule } from './politicaAceites/politicaAceites.module
 import { PaginaInstitucionalModule } from './paginaInstitucional/paginaInstitucional.module';
 import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module';
 import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInterno.module';
+import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoColaborador/recrutamentoInternoCandidato.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInt
     PaginaInstitucionalModule,
     BibliotecaMarcaModule,
     RecrutamentoInternoModule,
+    RecrutamentoInternoCandidatoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
