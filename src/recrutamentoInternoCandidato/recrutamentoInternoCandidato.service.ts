@@ -38,7 +38,6 @@ export class RecrutamentoInternoCandidatoService {
       data: {
         recrutamentoId: body.recrutamentoId,
         colaboradorId: usuario.id,
-        observacao: body.observacao ?? null,
       },
     });
 
@@ -77,6 +76,14 @@ export class RecrutamentoInternoCandidatoService {
       },
       include: {
         UsuarioChat: true,
+        RecrutamentoInternoCandidatoObservacao: {
+          include: {
+            UsuarioChat: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -85,14 +92,33 @@ export class RecrutamentoInternoCandidatoService {
   }
 
   async update(body: any, ip: string, user: any) {
+    const usuario = await this.prisma.usuarioChat.findUnique({
+      where: {
+        adObjectGuid: user.adObjectGuid,
+      },
+    });
+
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado.');
+    }
+
     const upd = await this.prisma.recrutamentoInternoCandidato.update({
       where: { id: body.id },
       data: {
         status: body.status,
-        observacao: body.observacao ?? null,
-        dataEntrevista: body.dataEntrevista ?? '',
+        dataEntrevista: body.dataEntrevista || null,
       },
     });
+
+    if (body.observacao?.trim()) {
+      await this.prisma.recrutamentoInternoCandidatoObservacao.create({
+        data: {
+          candidaturaId: upd.id,
+          criadoPorId: usuario.id,
+          observacao: body.observacao.trim(),
+        },
+      });
+    }
 
     await this.prisma.audit_logs.create({
       data: {
@@ -103,6 +129,21 @@ export class RecrutamentoInternoCandidatoService {
       },
     });
 
-    return upd;
+    return await this.prisma.recrutamentoInternoCandidato.findUnique({
+      where: {
+        id: upd.id,
+      },
+      include: {
+        UsuarioChat: true,
+        RecrutamentoInternoCandidatoObservacao: {
+          include: {
+            UsuarioChat: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
   }
 }

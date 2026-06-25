@@ -6,8 +6,6 @@ export class AssinaturaPadraoService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(body: any, file: Express.Multer.File, ip: string, user: any) {
-    console.log(body);
-
     if (!file) {
       throw new BadRequestException('Imagem de background é obrigatória.');
     }
@@ -156,8 +154,6 @@ export class AssinaturaPadraoService {
   }
 
   async update(body: any, file?: Express.Multer.File) {
-    console.log(body);
-    
     const id = body.id;
 
     if (!id || Number.isNaN(id)) {

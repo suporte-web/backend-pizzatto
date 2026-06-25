@@ -302,22 +302,23 @@ model ParticipanteConversa {
 }
 
 model UsuarioChat {
-  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  adObjectGuid                 String                         @unique
-  usuario                      String
-  nome                         String
-  email                        String?
-  empresa                      String?
-  departamento                 String?
-  telefone                     String?
-  ativo                        Boolean                        @default(true)
-  createdAt                    DateTime                       @default(now()) @db.Timestamp(6)
-  updatedAt                    DateTime                       @default(now()) @db.Timestamp(6)
-  Conversa                     Conversa[]
-  DashboardAcesso              DashboardAcesso[]
-  Mensagem                     Mensagem[]
-  ParticipanteConversa         ParticipanteConversa[]
-  RecrutamentoInternoCandidato RecrutamentoInternoCandidato[]
+  id                                     String                                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid                           String                                   @unique
+  usuario                                String
+  nome                                   String
+  email                                  String?
+  empresa                                String?
+  departamento                           String?
+  telefone                               String?
+  ativo                                  Boolean                                  @default(true)
+  createdAt                              DateTime                                 @default(now()) @db.Timestamp(6)
+  updatedAt                              DateTime                                 @default(now()) @db.Timestamp(6)
+  Conversa                               Conversa[]
+  DashboardAcesso                        DashboardAcesso[]
+  Mensagem                               Mensagem[]
+  ParticipanteConversa                   ParticipanteConversa[]
+  RecrutamentoInternoCandidato           RecrutamentoInternoCandidato[]
+  RecrutamentoInternoCandidatoObservacao RecrutamentoInternoCandidatoObservacao[]
 
   @@index([email])
   @@index([nome])
@@ -504,18 +505,28 @@ model RecrutamentoInterno {
 }
 
 model RecrutamentoInternoCandidato {
-  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  recrutamentoId      String              @db.Uuid
-  colaboradorId       String              @db.Uuid
-  observacao          String?
-  status              String              @default("PENDENTE")
-  createdAt           DateTime            @default(now()) @db.Timestamp(6)
-  updatedAt           DateTime            @default(now()) @db.Timestamp(6)
-  dataEntrevista      String?
-  UsuarioChat         UsuarioChat         @relation(fields: [colaboradorId], references: [id])
-  RecrutamentoInterno RecrutamentoInterno @relation(fields: [recrutamentoId], references: [id])
+  id                                     String                                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recrutamentoId                         String                                   @db.Uuid
+  colaboradorId                          String                                   @db.Uuid
+  status                                 String                                   @default("PENDENTE")
+  createdAt                              DateTime                                 @default(now()) @db.Timestamp(6)
+  updatedAt                              DateTime                                 @default(now()) @db.Timestamp(6)
+  dataEntrevista                         String?
+  UsuarioChat                            UsuarioChat                              @relation(fields: [colaboradorId], references: [id])
+  RecrutamentoInterno                    RecrutamentoInterno                      @relation(fields: [recrutamentoId], references: [id])
+  RecrutamentoInternoCandidatoObservacao RecrutamentoInternoCandidatoObservacao[]
 
   @@unique([recrutamentoId, colaboradorId])
+}
+
+model RecrutamentoInternoCandidatoObservacao {
+  id                           String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidaturaId                String                       @db.Uuid
+  observacao                   String
+  createdAt                    DateTime                     @default(now()) @db.Timestamp(6)
+  criadoPorId                  String                       @db.Uuid
+  RecrutamentoInternoCandidato RecrutamentoInternoCandidato @relation(fields: [candidaturaId], references: [id], onDelete: Cascade)
+  UsuarioChat                  UsuarioChat                  @relation(fields: [criadoPorId], references: [id])
 }
 
 enum Area {

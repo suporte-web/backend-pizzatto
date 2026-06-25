@@ -18,7 +18,7 @@ import { PoliticasAceitesModule } from './politicaAceites/politicaAceites.module
 import { PaginaInstitucionalModule } from './paginaInstitucional/paginaInstitucional.module';
 import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module';
 import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInterno.module';
-import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoColaborador/recrutamentoInternoCandidato.module';
+import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoCandidato/recrutamentoInternoCandidato.module';
 
 @Module({
   imports: [
