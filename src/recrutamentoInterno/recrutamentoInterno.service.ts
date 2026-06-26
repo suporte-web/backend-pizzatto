@@ -13,6 +13,7 @@ export class RecrutamentoInternoService {
         descricao: body.descricao,
         requisitos: body.requisitos,
         diferenciais: body.diferenciais,
+        beneficios: body.beneficios,
         departamento: body.departamento,
         filial: body.filial,
         modalidade: body.modalidade,
@@ -20,12 +21,8 @@ export class RecrutamentoInternoService {
         quantidadeVagas: body.quantidadeVagas
           ? Number(body.quantidadeVagas)
           : 1,
-        dataLimite: body.dataLimite
-          ? new Date(body.dataLimite)
-          : null,
-        dataInicio: body.dataInicio
-          ? new Date(body.dataInicio)
-          : null,
+        dataLimite: body.dataLimite ? new Date(body.dataLimite) : null,
+        dataInicio: body.dataInicio ? new Date(body.dataInicio) : null,
         gestorResponsavel: body.gestorResponsavel,
         emailContato: body.emailContato,
         ativo:
@@ -52,7 +49,7 @@ export class RecrutamentoInternoService {
     const limit = Number(body?.limit) > 0 ? Number(body.limit) : 10;
 
     const skip = (page - 1) * limit;
-    
+
     const where: any = {};
 
     if (body.ativo === true || body.ativo === 'true') {
@@ -188,12 +185,8 @@ export class RecrutamentoInternoService {
         quantidadeVagas: data.quantidadeVagas
           ? Number(data.quantidadeVagas)
           : undefined,
-        dataLimite: data.dataLimite
-          ? new Date(data.dataLimite)
-          : undefined,
-        dataInicio: data.dataInicio
-          ? new Date(data.dataInicio)
-          : undefined,
+        dataLimite: data.dataLimite ? new Date(data.dataLimite) : undefined,
+        dataInicio: data.dataInicio ? new Date(data.dataInicio) : undefined,
       },
     });
 
@@ -207,5 +200,63 @@ export class RecrutamentoInternoService {
     });
 
     return patch;
+  }
+
+  async countRecrutamentosCriados(body: any) {
+    const hoje = new Date();
+
+    const primeiroDiaMesAtual = new Date(
+      hoje.getFullYear(),
+      hoje.getMonth(),
+      1,
+    );
+
+    const primeiroDiaMesPassado = new Date(
+      hoje.getFullYear(),
+      hoje.getMonth() - 1,
+      1,
+    );
+
+    const total = await this.prisma.recrutamentoInterno.count({
+      where: {
+        createdAt: {
+          gte: primeiroDiaMesPassado,
+          lt: primeiroDiaMesAtual,
+        },
+      },
+    });
+
+    const abertas = await this.prisma.recrutamentoInterno.count({
+      where: {
+        createdAt: {
+          gte: primeiroDiaMesPassado,
+          lt: primeiroDiaMesAtual,
+        },
+        dataLimite: {
+          gte: hoje,
+        },
+      },
+    });
+
+    const fechadas = await this.prisma.recrutamentoInterno.count({
+      where: {
+        createdAt: {
+          gte: primeiroDiaMesPassado,
+          lt: primeiroDiaMesAtual,
+        },
+        dataLimite: {
+          lt: hoje,
+        },
+      },
+    });
+
+    return {
+      mesReferencia: `${primeiroDiaMesPassado.getFullYear()}-${String(
+        primeiroDiaMesPassado.getMonth() + 1,
+      ).padStart(2, '0')}`,
+      total,
+      abertas,
+      fechadas,
+    };
   }
 }

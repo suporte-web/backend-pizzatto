@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Patch,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { AuthGuard } from '@/auth/auth.guard';
@@ -24,37 +17,32 @@ export class RecrutamentoInternoController {
 
   @Post('create')
   @ApiOperation({ summary: 'Cria o Recrutamento Interno' })
-  async create(
-    @Body() body: any,
-    @ClientIp() ip: string,
-        @User() user: any,
-  ) {
-    return await this.recrutamentoInternoService.create(
-      body,
-      ip,
-      user,
-    );
+  async create(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
+    return await this.recrutamentoInternoService.create(body, ip, user);
   }
 
   @Post('findByFilter')
   @ApiOperation({ summary: 'Encontra o Recrutamento Interno filtrando' })
   async findByFilter(@Body() body: any) {
-    return await this.recrutamentoInternoService.findByFilter(
-      body,
-    );
+    return await this.recrutamentoInternoService.findByFilter(body);
   }
 
   @Patch('update')
-  @ApiOperation({ summary: 'Atualiza o Recrutamento Interno com base no ID passado' })
-  async update(
-    @Body() body: any,
-    @ClientIp() ip: string,
-    @User() user: any,
-  ) {
-    return await this.recrutamentoInternoService.update(
+  @ApiOperation({
+    summary: 'Atualiza o Recrutamento Interno com base no ID passado',
+  })
+  async update(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
+    return await this.recrutamentoInternoService.update(body, ip, user);
+  }
+
+  @Post('count-recrutamentos-criados')
+  @ApiOperation({
+    summary:
+      'Contagem de Recrutamentos Internos criados com base no mes passado',
+  })
+  async countRecrutamentosCriados(@Body() body: any) {
+    return await this.recrutamentoInternoService.countRecrutamentosCriados(
       body,
-      ip,
-      user,
     );
   }
 }

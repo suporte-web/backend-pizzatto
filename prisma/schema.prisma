@@ -501,6 +501,7 @@ model RecrutamentoInterno {
   ativo                        Boolean                        @default(true)
   createdAt                    DateTime                       @default(now()) @db.Timestamp(6)
   updatedAt                    DateTime                       @default(now()) @db.Timestamp(6)
+  beneficios                   String?
   RecrutamentoInternoCandidato RecrutamentoInternoCandidato[]
 }
 
