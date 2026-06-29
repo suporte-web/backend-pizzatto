@@ -38,7 +38,7 @@ export class RecrutamentoInternoController {
   @Post('count-recrutamentos-criados')
   @ApiOperation({
     summary:
-      'Contagem de Recrutamentos Internos criados com base no mes passado',
+      'Contagem de Recrutamentos Internos criados com base no mê referencia passado',
   })
   async countRecrutamentosCriados(@Body() body: any) {
     return await this.recrutamentoInternoService.countRecrutamentosCriados(

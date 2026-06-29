@@ -11,6 +11,7 @@ export class RecrutamentoInternoService {
       data: {
         vaga: body.vaga,
         descricao: body.descricao,
+        horario: body.horario,
         requisitos: body.requisitos,
         diferenciais: body.diferenciais,
         beneficios: body.beneficios,
@@ -203,25 +204,19 @@ export class RecrutamentoInternoService {
   }
 
   async countRecrutamentosCriados(body: any) {
+    const [ano, mes] = body.data.split('-').map(Number);
+
+    const primeiroDiaMes = new Date(ano, mes - 1, 1);
+    const primeiroDiaProximoMes = new Date(ano, mes, 1);
+
+    // Continua usando a data atual apenas para saber se a vaga está aberta/fechada
     const hoje = new Date();
-
-    const primeiroDiaMesAtual = new Date(
-      hoje.getFullYear(),
-      hoje.getMonth(),
-      1,
-    );
-
-    const primeiroDiaMesPassado = new Date(
-      hoje.getFullYear(),
-      hoje.getMonth() - 1,
-      1,
-    );
 
     const total = await this.prisma.recrutamentoInterno.count({
       where: {
         createdAt: {
-          gte: primeiroDiaMesPassado,
-          lt: primeiroDiaMesAtual,
+          gte: primeiroDiaMes,
+          lt: primeiroDiaProximoMes,
         },
       },
     });
@@ -229,8 +224,8 @@ export class RecrutamentoInternoService {
     const abertas = await this.prisma.recrutamentoInterno.count({
       where: {
         createdAt: {
-          gte: primeiroDiaMesPassado,
-          lt: primeiroDiaMesAtual,
+          gte: primeiroDiaMes,
+          lt: primeiroDiaProximoMes,
         },
         dataLimite: {
           gte: hoje,
@@ -241,8 +236,8 @@ export class RecrutamentoInternoService {
     const fechadas = await this.prisma.recrutamentoInterno.count({
       where: {
         createdAt: {
-          gte: primeiroDiaMesPassado,
-          lt: primeiroDiaMesAtual,
+          gte: primeiroDiaMes,
+          lt: primeiroDiaProximoMes,
         },
         dataLimite: {
           lt: hoje,
@@ -251,9 +246,7 @@ export class RecrutamentoInternoService {
     });
 
     return {
-      mesReferencia: `${primeiroDiaMesPassado.getFullYear()}-${String(
-        primeiroDiaMesPassado.getMonth() + 1,
-      ).padStart(2, '0')}`,
+      mesReferencia: body.data,
       total,
       abertas,
       fechadas,

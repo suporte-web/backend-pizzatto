@@ -502,6 +502,7 @@ model RecrutamentoInterno {
   createdAt                    DateTime                       @default(now()) @db.Timestamp(6)
   updatedAt                    DateTime                       @default(now()) @db.Timestamp(6)
   beneficios                   String?
+  horario                      String?
   RecrutamentoInternoCandidato RecrutamentoInternoCandidato[]
 }
 

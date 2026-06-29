@@ -146,4 +146,51 @@ export class RecrutamentoInternoCandidatoService {
       },
     });
   }
+
+  async countCandidatosInscritos(body: any) {
+    const [ano, mes] = body.data.split('-').map(Number);
+
+    const primeiroDiaMes = new Date(ano, mes - 1, 1);
+    const primeiroDiaProximoMes = new Date(ano, mes, 1);
+
+    const wherePeriodo = {
+      createdAt: {
+        gte: primeiroDiaMes,
+        lt: primeiroDiaProximoMes,
+      },
+    };
+
+    const total = await this.prisma.recrutamentoInternoCandidato.count({
+      where: wherePeriodo,
+    });
+
+    const aprovados = await this.prisma.recrutamentoInternoCandidato.count({
+      where: {
+        ...wherePeriodo,
+        status: 'APROVADO',
+      },
+    });
+
+    const reprovados = await this.prisma.recrutamentoInternoCandidato.count({
+      where: {
+        ...wherePeriodo,
+        status: 'REPROVADO',
+      },
+    });
+
+    const emAberto = await this.prisma.recrutamentoInternoCandidato.count({
+      where: {
+        ...wherePeriodo,
+        OR: [{ status: 'PENDENTE' }, {status: 'CONVERSA INICIADA'}, {status: 'ENTREVISTA MARCADA'}],
+      },
+    });
+
+    return {
+      mesReferencia: body.data,
+      total,
+      aprovados,
+      reprovados,
+      emAberto,
+    };
+  }
 }
