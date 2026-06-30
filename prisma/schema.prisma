@@ -514,6 +514,8 @@ model RecrutamentoInternoCandidato {
   createdAt                              DateTime                                 @default(now()) @db.Timestamp(6)
   updatedAt                              DateTime                                 @default(now()) @db.Timestamp(6)
   dataEntrevista                         String?
+  curriculo                              Json?
+  resumoProfissional                     String?
   UsuarioChat                            UsuarioChat                              @relation(fields: [colaboradorId], references: [id])
   RecrutamentoInterno                    RecrutamentoInterno                      @relation(fields: [recrutamentoId], references: [id])
   RecrutamentoInternoCandidatoObservacao RecrutamentoInternoCandidatoObservacao[]

@@ -4,12 +4,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/browser';
+
+export function fixFileName(name: string) {
+  return Buffer.from(name, 'latin1').toString('utf8').normalize('NFC');
+}
 
 @Injectable()
 export class RecrutamentoInternoCandidatoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(body: any, ip: string, user: any) {
+  async create(
+    body: any,
+    curriculo: Express.Multer.File,
+    ip: string,
+    user: any,
+  ) {
     const usuario = await this.prisma.usuarioChat.findUnique({
       where: {
         adObjectGuid: user.adObjectGuid,
@@ -34,10 +44,22 @@ export class RecrutamentoInternoCandidatoService {
       throw new ConflictException('Você já está inscrito nesta vaga.');
     }
 
+    const arquivoCurriculo = curriculo
+      ? {
+          nomeOriginal: fixFileName(curriculo.originalname),
+          nomeSalvo: curriculo.filename,
+          caminho: `/downloads/curriculos-recrutamento/${curriculo.filename}`,
+          mimeType: curriculo.mimetype,
+          tamanho: curriculo.size,
+        }
+      : Prisma.JsonNull;
+
     const create = await this.prisma.recrutamentoInternoCandidato.create({
       data: {
         recrutamentoId: body.recrutamentoId,
         colaboradorId: usuario.id,
+        resumoProfissional: body.resumoProfissional || null,
+        curriculo: arquivoCurriculo,
       },
     });
 
@@ -181,7 +203,11 @@ export class RecrutamentoInternoCandidatoService {
     const emAberto = await this.prisma.recrutamentoInternoCandidato.count({
       where: {
         ...wherePeriodo,
-        OR: [{ status: 'PENDENTE' }, {status: 'CONVERSA INICIADA'}, {status: 'ENTREVISTA MARCADA'}],
+        OR: [
+          { status: 'PENDENTE' },
+          { status: 'CONVERSA INICIADA' },
+          { status: 'ENTREVISTA MARCADA' },
+        ],
       },
     });
 
