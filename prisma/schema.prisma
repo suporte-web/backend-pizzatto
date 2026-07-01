@@ -516,6 +516,7 @@ model RecrutamentoInternoCandidato {
   dataEntrevista                         String?
   curriculo                              Json?
   resumoProfissional                     String?
+  motivoReprovacao                       String?
   UsuarioChat                            UsuarioChat                              @relation(fields: [colaboradorId], references: [id])
   RecrutamentoInterno                    RecrutamentoInterno                      @relation(fields: [recrutamentoId], references: [id])
   RecrutamentoInternoCandidatoObservacao RecrutamentoInternoCandidatoObservacao[]
@@ -531,6 +532,14 @@ model RecrutamentoInternoCandidatoObservacao {
   criadoPorId                  String                       @db.Uuid
   RecrutamentoInternoCandidato RecrutamentoInternoCandidato @relation(fields: [candidaturaId], references: [id], onDelete: Cascade)
   UsuarioChat                  UsuarioChat                  @relation(fields: [criadoPorId], references: [id])
+}
+
+model MotivosReprovacao {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String   @unique
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @db.Timestamp(6)
 }
 
 enum Area {

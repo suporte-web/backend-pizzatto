@@ -129,6 +129,7 @@ export class RecrutamentoInternoCandidatoService {
       data: {
         status: body.status,
         dataEntrevista: body.dataEntrevista || null,
+        motivoReprovacao: body.motivoReprovacao || null,
       },
     });
 

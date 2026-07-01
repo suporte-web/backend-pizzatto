@@ -19,6 +19,7 @@ import { PaginaInstitucionalModule } from './paginaInstitucional/paginaInstituci
 import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module';
 import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInterno.module';
 import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoCandidato/recrutamentoInternoCandidato.module';
+import { MotivosReprovacaoModule } from './motivosReprovacao/motivosReprovacao.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoCandida
     BibliotecaMarcaModule,
     RecrutamentoInternoModule,
     RecrutamentoInternoCandidatoModule,
+    MotivosReprovacaoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
