@@ -220,4 +220,41 @@ export class RecrutamentoInternoCandidatoService {
       emAberto,
     };
   }
+
+  async countMotivosReprovacao(body: any) {
+    const [ano, mes] = body.data.split('-').map(Number);
+
+    const primeiroDiaMes = new Date(ano, mes - 1, 1);
+    const primeiroDiaProximoMes = new Date(ano, mes, 1);
+
+    const wherePeriodo = {
+      createdAt: {
+        gte: primeiroDiaMes,
+        lt: primeiroDiaProximoMes,
+      },
+    };
+
+    const motivos = await this.prisma.recrutamentoInternoCandidato.groupBy({
+      by: ['motivoReprovacao'],
+      where: {
+        ...wherePeriodo,
+        motivoReprovacao: {
+          not: null, // ignora registros sem motivo
+        },
+      },
+      _count: {
+        motivoReprovacao: true,
+      },
+      orderBy: {
+        _count: {
+          motivoReprovacao: 'desc',
+        },
+      },
+    });
+
+    return motivos.map((item) => ({
+      nome: item.motivoReprovacao,
+      quantidade: item._count.motivoReprovacao,
+    }));
+  }
 }

@@ -95,6 +95,16 @@ export class RecrutamentoInternoCandidatoController {
     );
   }
 
+  @Post('count-motivos-reprovacao')
+  @ApiOperation({
+    summary: 'Conta os Motivos de Reprovação com base no mês de referencia passado',
+  })
+  async countMotivosReprovacao(@Body() body: any) {
+    return await this.recrutamentoInternoCandidatoService.countMotivosReprovacao(
+      body,
+    );
+  }
+
   @Get('download/:nomeArquivo')
   downloadArquivo(
     @Param('nomeArquivo') nomeArquivo: string,
