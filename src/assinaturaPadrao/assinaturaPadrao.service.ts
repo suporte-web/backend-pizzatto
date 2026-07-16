@@ -225,4 +225,28 @@ export class AssinaturaPadraoService {
       where: { id: body.id },
     });
   }
+
+  async changeAssinaturaPadrao(id: string) {
+  return this.prisma.$transaction(async (tx) => {
+    // Remove a assinatura padrão atual
+    await tx.assinaturaPadrao.updateMany({
+      where: {
+        isAtual: true,
+      },
+      data: {
+        isAtual: false,
+      },
+    });
+
+    // Define a nova assinatura padrão
+    return tx.assinaturaPadrao.update({
+      where: {
+        id,
+      },
+      data: {
+        isAtual: true,
+      },
+    });
+  });
+}
 }

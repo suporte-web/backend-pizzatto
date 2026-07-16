@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Param,
   Patch,
   Post,
   UploadedFile,
@@ -83,5 +84,10 @@ export class AssinaturaPadraoController {
   })
   async delete(@Body() body: any) {
     return await this.assinaturaPadraoService.delete(body);
+  }
+
+  @Patch('change-assinatura-padrao/:id')
+  changeAssinaturaPadrao(@Param('id') id: string) {
+    return this.assinaturaPadraoService.changeAssinaturaPadrao(id);
   }
 }
