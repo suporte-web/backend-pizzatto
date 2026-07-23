@@ -313,6 +313,7 @@ model UsuarioChat {
   ativo                                  Boolean                                  @default(true)
   createdAt                              DateTime                                 @default(now()) @db.Timestamp(6)
   updatedAt                              DateTime                                 @default(now()) @db.Timestamp(6)
+  cargo                                  String?
   Conversa                               Conversa[]
   DashboardAcesso                        DashboardAcesso[]
   Mensagem                               Mensagem[]
@@ -338,6 +339,7 @@ model DashboardAcesso {
   createdAt               DateTime    @default(now()) @db.Timestamp(6)
   dataHoraSaida           DateTime?   @db.Timestamp(6)
   dataHoraUltimaAtividade DateTime?   @db.Timestamp(6)
+  cargo                   String?
   UsuarioChat             UsuarioChat @relation(fields: [adObjectGuid], references: [adObjectGuid])
 
   @@index([adObjectGuid])
@@ -540,6 +542,78 @@ model MotivosReprovacao {
   ativo     Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamp(6)
   updatedAt DateTime @default(now()) @db.Timestamp(6)
+}
+
+model AreaDashboard {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String      @unique
+  descricao String?
+  icone     String?
+  ativo     Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime
+  Dashboard Dashboard[]
+}
+
+model Dashboard {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome                  String
+  descricao             String?
+  tipo                  String                  @default("custom")
+  url                   String?
+  iframe                String?
+  criadoPor             String?
+  areaId                String                  @db.Uuid
+  ativo                 Boolean                 @default(true)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @db.Timestamp(6)
+  AreaDashboard         AreaDashboard           @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  DashboardControlador  DashboardControlador[]
+  DashboardDepartamento DashboardDepartamento[]
+  DashboardFilial       DashboardFilial[]
+  DashboardUsuario      DashboardUsuario[]
+}
+
+model DashboardControlador {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboardId String    @db.Uuid
+  objectGUID  String
+  nome        String?
+  createdAt   DateTime  @default(now())
+  Dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, objectGUID])
+}
+
+model DashboardDepartamento {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboardId  String    @db.Uuid
+  departamento String
+  createdAt    DateTime  @default(now())
+  Dashboard    Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, departamento])
+}
+
+model DashboardFilial {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboardId String    @db.Uuid
+  filial      String
+  createdAt   DateTime  @default(now())
+  Dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, filial])
+}
+
+model DashboardUsuario {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dashboardId String    @db.Uuid
+  objectGUID  String
+  nome        String?
+  createdAt   DateTime  @default(now())
+  Dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, objectGUID])
 }
 
 enum Area {
