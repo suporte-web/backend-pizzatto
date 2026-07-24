@@ -259,7 +259,7 @@ export class AssinaturasEmailService {
 
       if (caminhoImagem) {
         attachments.push({
-          filename: 'assinatura-aprovada.jpeg',
+          filename: 'assinatura-aprovada.png',
           path: `${process.env.API_BACKEND}/${caminhoImagem}`,
         });
       }
