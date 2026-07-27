@@ -56,12 +56,8 @@ export class AssinaturasEmailController {
     return await this.assinaturasEmailService.findByFilter(body);
   }
 
-  @Patch('update-validacao/:id')
-  @ApiOperation({
-    summary:
-      'Atualiza Validação feita pelo EndoMarketing na Assinatura de E-mail',
-  })
-  async updateValidacao(@Param('id') id: string, @Body() body: any) {
-    return await this.assinaturasEmailService.updateValidacao(id, body);
+  @Patch('update-validacao')
+  async updateValidacao(@Body() body: any) {
+    return this.assinaturasEmailService.updateValidacao(body.id, body);
   }
 }

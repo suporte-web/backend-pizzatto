@@ -1,6 +1,13 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as nodemailer from 'nodemailer';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class AssinaturasEmailService {
@@ -122,164 +129,205 @@ export class AssinaturasEmailService {
     });
 
     if (!assinatura) {
-      throw new BadRequestException('Assinatura não encontrada.');
+      throw new NotFoundException('Assinatura não encontrada.');
+    }
+
+    if (!['APROVADO', 'REPROVADO'].includes(body.status)) {
+      throw new BadRequestException('Status inválido.');
+    }
+
+    const destinatario = assinatura.email;
+
+    if (!destinatario) {
+      throw new BadRequestException(
+        'A assinatura não possui um e-mail válido.',
+      );
     }
 
     let subject = '';
     let html = '';
-    let attachments: any[] = [];
+    const attachments: nodemailer.SendMailOptions['attachments'] = [];
 
     if (body.status === 'REPROVADO') {
       subject = 'Sua assinatura foi reprovada ❌';
 
       html = `
-        <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8; padding:32px 16px;">
-            <tr>
-              <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 4px 18px rgba(0,0,0,0.08);">
-                  
-                  <tr>
-                    <td style="background:linear-gradient(90deg, #d32f2f, #ef5350); padding:24px 32px; color:#ffffff;">
-                      <h1 style="margin:0; font-size:24px; font-weight:700;">Assinatura reprovada</h1>
-                      <p style="margin:8px 0 0; font-size:14px; opacity:0.95;">
-                        Atualização sobre a sua solicitação de assinatura de e-mail
-                      </p>
-                    </td>
-                  </tr>
+      <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+          style="background-color:#f4f6f8; padding:32px 16px;">
+          <tr>
+            <td align="center">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                style="max-width:640px; background:#ffffff; border-radius:14px; overflow:hidden;">
+                <tr>
+                  <td style="background:#d32f2f; padding:24px 32px; color:#ffffff;">
+                    <h1 style="margin:0; font-size:24px;">
+                      Assinatura reprovada
+                    </h1>
+                  </td>
+                </tr>
 
-                  <tr>
-                    <td style="padding:32px;">
-                      <p style="margin:0 0 16px; font-size:16px; color:#333333;">
-                        Olá, <strong>${body.nome}</strong>.
-                      </p>
-
-                      <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
-                        Informamos que a sua solicitação de assinatura de e-mail foi
-                        <strong style="color:#d32f2f;"> reprovada</strong> após a análise da equipe responsável.
-                      </p>
-
-                      <div style="margin:24px 0; padding:18px 20px; background:#fff4f4; border:1px solid #f3c7c7; border-radius:10px;">
-                        <p style="margin:0 0 8px; font-size:14px; font-weight:700; color:#b71c1c;">
-                          Motivo da reprovação
-                        </p>
-                        <p style="margin:0; font-size:14px; line-height:1.6; color:#6b2c2c;">
-                          ${body.motivo ?? 'Não informado'}
-                        </p>
-                      </div>
-
-                      <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
-                        Pedimos, por gentileza, que realize os ajustes necessários e envie novamente para uma nova validação.
-                      </p>
-
-                      <p style="margin:24px 0 0; font-size:15px; color:#333333;">
-                        Atenciosamente,<br />
-                        <strong>Equipe de Marketing</strong>
-                      </p>
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td style="padding:18px 32px; background:#fafafa; border-top:1px solid #eeeeee;">
-                      <p style="margin:0; font-size:12px; color:#888888; text-align:center;">
-                        Este é um e-mail automático. Em caso de dúvidas, entre em contato com a equipe responsável.
-                      </p>
-                    </td>
-                  </tr>
-
-                </table>
-              </td>
-            </tr>
-          </table>
-        </div>
-      `;
-    } else if (body.status === 'APROVADO') {
-      const caminhoImagem = assinatura.caminhoImagem || '';
-
-      subject = 'Sua assinatura foi aprovada ✅';
-
-      html = `
-    <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f8; padding:32px 16px;">
-        <tr>
-          <td align="center">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 4px 18px rgba(0,0,0,0.08);">
-              
-              <tr>
-                <td style="background:linear-gradient(90deg, #2e7d32, #43a047); padding:24px 32px; color:#ffffff;">
-                  <h1 style="margin:0; font-size:24px; font-weight:700;">Assinatura aprovada</h1>
-                  <p style="margin:8px 0 0; font-size:14px; opacity:0.95;">
-                    Sua assinatura de e-mail foi validada com sucesso
-                  </p>
-                </td>
-              </tr>
-
-              <tr>
-                <td style="padding:32px;">
-                  <p style="margin:0 0 16px; font-size:16px; color:#333333;">
-                    Olá, <strong>${body.nome}</strong>.
-                  </p>
-
-                  <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
-                    Temos uma boa notícia: sua solicitação de assinatura de e-mail foi
-                    <strong style="color:#2e7d32;"> aprovada com sucesso</strong>.
-                  </p>
-
-                  <div style="margin:24px 0; padding:18px 20px; background:#f1f8f2; border:1px solid #cfe8d1; border-radius:10px;">
-                    <p style="margin:0; font-size:14px; line-height:1.7; color:#2f5d34;">
-                      A assinatura aprovada segue em anexo neste e-mail para download.
+                <tr>
+                  <td style="padding:32px;">
+                    <p style="font-size:16px; color:#333333;">
+                      Olá, <strong>${assinatura.nome}</strong>.
                     </p>
-                  </div>
 
-                  <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#555555;">
-                    Recomendamos que utilize o arquivo enviado como padrão oficial da sua assinatura corporativa.
-                  </p>
+                    <p style="font-size:15px; line-height:1.7; color:#555555;">
+                      Sua solicitação de assinatura foi reprovada.
+                    </p>
 
-                  <p style="margin:24px 0 0; font-size:15px; color:#333333;">
-                    Atenciosamente,<br />
-                    <strong>Equipe de Marketing</strong>
-                  </p>
-                </td>
-              </tr>
+                    <div style="margin:24px 0; padding:18px 20px; background:#fff4f4; border:1px solid #f3c7c7; border-radius:10px;">
+                      <strong style="color:#b71c1c;">
+                        Motivo da reprovação
+                      </strong>
 
-              <tr>
-                <td style="padding:18px 32px; background:#fafafa; border-top:1px solid #eeeeee;">
-                  <p style="margin:0; font-size:12px; color:#888888; text-align:center;">
-                    Este é um e-mail automático. Em caso de dúvidas, entre em contato com a equipe responsável.
-                  </p>
-                </td>
-              </tr>
+                      <p style="margin:8px 0 0; color:#6b2c2c;">
+                        ${body.motivo?.trim() || 'Não informado'}
+                      </p>
+                    </div>
 
-            </table>
-          </td>
-        </tr>
-      </table>
-    </div>
-  `;
-
-      if (caminhoImagem) {
-        attachments.push({
-          filename: 'assinatura-aprovada.png',
-          path: `${process.env.API_BACKEND}/${caminhoImagem}`,
-        });
-      }
-    } else {
-      throw new BadRequestException('Status inválido.');
+                    <p style="font-size:15px; color:#333333;">
+                      Atenciosamente,<br />
+                      <strong>Equipe de Marketing</strong>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
     }
 
-    await this.transporter.sendMail({
-      from: process.env.SMTP_FROM,
-      to: body.email,
-      subject,
-      html,
-      attachments,
-    });
+    if (body.status === 'APROVADO') {
+      subject = 'Sua assinatura foi aprovada ✅';
 
-    await this.prisma.assinatura.update({
+      if (!assinatura.caminhoImagem) {
+        throw new BadRequestException(
+          'A assinatura não possui uma imagem vinculada.',
+        );
+      }
+
+      /*
+       * No create, o caminho salvo é:
+       * downloads/assinaturas/nome-do-arquivo.png
+       *
+       * process.cwd() precisa apontar para a raiz da aplicação,
+       * onde está a pasta downloads.
+       */
+      const caminhoAbsoluto = path.resolve(
+        process.cwd(),
+        assinatura.caminhoImagem,
+      );
+
+      console.log('[ASSINATURA] Caminho do anexo:', caminhoAbsoluto);
+
+      if (!fs.existsSync(caminhoAbsoluto)) {
+        console.error('[ASSINATURA] Arquivo não encontrado:', caminhoAbsoluto);
+
+        throw new NotFoundException(
+          'O arquivo da assinatura não foi encontrado no servidor.',
+        );
+      }
+
+      attachments.push({
+        filename: `assinatura-${assinatura.nome
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-zA-Z0-9-_ ]/g, '')
+          .trim()
+          .replace(/\s+/g, '-')
+          .toLowerCase()}-${Date.now()}.jpeg`,
+        path: caminhoAbsoluto,
+        contentType: 'image/jeg',
+      });
+
+      html = `
+      <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+          style="background-color:#f4f6f8; padding:32px 16px;">
+          <tr>
+            <td align="center">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                style="max-width:640px; background:#ffffff; border-radius:14px; overflow:hidden;">
+                <tr>
+                  <td style="background:#2e7d32; padding:24px 32px; color:#ffffff;">
+                    <h1 style="margin:0; font-size:24px;">
+                      Assinatura aprovada
+                    </h1>
+
+                    <p style="margin:8px 0 0; font-size:14px;">
+                      Sua assinatura foi validada com sucesso.
+                    </p>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:32px;">
+                    <p style="font-size:16px; color:#333333;">
+                      Olá, <strong>${assinatura.nome}</strong>.
+                    </p>
+
+                    <p style="font-size:15px; line-height:1.7; color:#555555;">
+                      Sua solicitação de assinatura de e-mail foi
+                      <strong style="color:#2e7d32;">
+                        aprovada com sucesso
+                      </strong>.
+                    </p>
+
+                    <div style="margin:24px 0; padding:18px 20px; background:#f1f8f2; border:1px solid #cfe8d1; border-radius:10px;">
+                      <p style="margin:0; color:#2f5d34;">
+                        A assinatura aprovada segue anexada a este e-mail.
+                      </p>
+                    </div>
+
+                    <p style="font-size:15px; color:#333333;">
+                      Atenciosamente,<br />
+                      <strong>Equipe de Marketing</strong>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+    }
+
+    try {
+      const resultadoEmail = await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: destinatario,
+        subject,
+        html,
+        attachments,
+      });
+
+      console.log('[ASSINATURA] E-mail enviado:', {
+        assinaturaId: assinatura.id,
+        destinatario,
+        messageId: resultadoEmail.messageId,
+        anexos: attachments.length,
+      });
+    } catch (error) {
+      console.error('[ASSINATURA] Erro no envio do e-mail:', error);
+
+      throw new InternalServerErrorException(
+        'Não foi possível enviar o e-mail da assinatura.',
+      );
+    }
+
+    return this.prisma.assinatura.update({
       where: { id },
       data: {
         status: body.status,
-        motivo: body.status === 'REPROVADO' ? body.motivo : null,
+        motivo:
+          body.status === 'REPROVADO'
+            ? body.motivo?.trim() || 'Não informado'
+            : null,
       },
     });
   }
