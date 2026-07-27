@@ -145,6 +145,7 @@ export class RecrutamentoInternoService {
     const result = await this.prisma.recrutamentoInterno.findMany({
       where,
       skip,
+      take: limit,
       include: {
         RecrutamentoInternoCandidato: true,
       },
