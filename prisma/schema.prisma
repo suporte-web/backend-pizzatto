@@ -616,6 +616,103 @@ model DashboardUsuario {
   @@unique([dashboardId, objectGUID])
 }
 
+model Documento {
+  id                            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome                          String
+  codigo                        String              @unique
+  setorResponsavel              String
+  categoriaId                   String              @db.Uuid
+  responsavelId                 String
+  responsavelNome               String
+  responsavelEmail              String?
+  descricao                     String?
+  dataPublicacao                DateTime            @default(now())
+  dataProximaRevisao            DateTime
+  versaoAtual                   String              @default("1.0")
+  status                        String              @default("ATIVO")
+  visibilidade                  String              @default("PUBLICO")
+  tipoRestricao                 String?
+  ativo                         Boolean             @default(true)
+  createdAt                     DateTime            @default(now())
+  updatedAt                     DateTime            @default(now()) @db.Timestamp(6)
+  confirmacaoLeituraObrigatoria Boolean             @default(false)
+  DocumentoCategoria            DocumentoCategoria  @relation(fields: [categoriaId], references: [id])
+  DocumentoAcesso               DocumentoAcesso[]
+  DocumentoFavorito             DocumentoFavorito[]
+  DocumentoLeitura              DocumentoLeitura[]
+  DocumentoVersao               DocumentoVersao[]
+}
+
+model DocumentoAcesso {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentoId  String    @db.Uuid
+  tipo         String
+  valor        String
+  nomeExibicao String?
+  createdAt    DateTime  @default(now())
+  Documento    Documento @relation(fields: [documentoId], references: [id])
+}
+
+model DocumentoCategoria {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String
+  ativo     Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @default(now()) @db.Timestamp(6)
+  Documento Documento[]
+}
+
+model DocumentoFavorito {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentoId   String    @db.Uuid
+  colaboradorId String    @db.Uuid
+  createdAt     DateTime  @default(now())
+  Documento     Documento @relation(fields: [documentoId], references: [id])
+
+  @@unique([documentoId, colaboradorId])
+}
+
+model DocumentoLeitura {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentoId      String          @db.Uuid
+  versaoId         String          @db.Uuid
+  colaboradorId    String
+  colaboradorNome  String?
+  colaboradorEmail String?
+  confirmadoEm     DateTime?
+  obrigatorio      Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @default(now()) @db.Timestamp(6)
+  Documento        Documento       @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  DocumentoVersao  DocumentoVersao @relation(fields: [versaoId], references: [id], onDelete: Cascade)
+
+  @@unique([documentoId, versaoId, colaboradorId])
+  @@index([colaboradorId, confirmadoEm])
+  @@index([colaboradorId])
+  @@index([documentoId])
+  @@index([versaoId])
+}
+
+model DocumentoVersao {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentoId      String             @db.Uuid
+  versao           String
+  nomeOriginal     String
+  nomeSalvo        String
+  caminho          String
+  mimeType         String
+  tamanho          Int
+  vigente          Boolean            @default(true)
+  publicadoPorId   String
+  publicadoPorNome String
+  createdAt        DateTime           @default(now())
+  DocumentoLeitura DocumentoLeitura[]
+  Documento        Documento          @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  @@index([documentoId])
+  @@index([documentoId, vigente])
+}
+
 enum Area {
   Sistemas
   Infra

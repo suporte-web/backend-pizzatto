@@ -20,6 +20,7 @@ import { BibliotecaMarcaModule } from './bibliotecaMarca/bibliotecaMarca.module'
 import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInterno.module';
 import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoCandidato/recrutamentoInternoCandidato.module';
 import { MotivosReprovacaoModule } from './motivosReprovacao/motivosReprovacao.module';
+import { GestaoDocumentosModule } from './gestaoDocumentos/gestaoDocumentos.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { MotivosReprovacaoModule } from './motivosReprovacao/motivosReprovacao.m
     RecrutamentoInternoModule,
     RecrutamentoInternoCandidatoModule,
     MotivosReprovacaoModule,
+    GestaoDocumentosModule,
   ],
   controllers: [AppController],
   providers: [AppService],
