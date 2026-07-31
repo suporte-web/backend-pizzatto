@@ -253,4 +253,9 @@ export class GestaoDocumentosController {
   async visualizarAceites(@Param('idDocumento') idDocumento: string) {
     return this.gestaoDocumentosService.visualizarAceites(idDocumento);
   }
+
+  @Get('dashboard')
+  async dashboardGestaoDocumentos(@User() user: any) {
+    return this.gestaoDocumentosService.dashboardGestaoDocumentos(user);
+  }
 }

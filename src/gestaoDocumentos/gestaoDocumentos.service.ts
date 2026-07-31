@@ -1984,6 +1984,491 @@ export class GestaoDocumentosService {
     });
   }
 
+  async dashboardGestaoDocumentos(user: any) {
+    const agora = new Date();
+
+    const inicioHoje = new Date(agora);
+    inicioHoje.setHours(0, 0, 0, 0);
+
+    const fimProximosTrintaDias = new Date(inicioHoje);
+    fimProximosTrintaDias.setDate(fimProximosTrintaDias.getDate() + 30);
+    fimProximosTrintaDias.setHours(23, 59, 59, 999);
+
+    const filtroAcesso = this.montarFiltroAcessoDocumentos(user);
+
+    /*
+     * Cria um novo objeto de filtro para cada consulta.
+     *
+     * Isso evita compartilhar referências do objeto AND entre
+     * as consultas executadas pelo Promise.all.
+     */
+    const montarWhereBase = (incluirSomenteAtivos = false) => {
+      const where: any = {
+        AND: [],
+      };
+
+      if (incluirSomenteAtivos) {
+        where.ativo = true;
+      }
+
+      if (filtroAcesso) {
+        where.AND.push(filtroAcesso);
+      }
+
+      if (where.AND.length === 0) {
+        delete where.AND;
+      }
+
+      return where;
+    };
+
+    const whereAtivos: any = montarWhereBase(true);
+
+    const wherePublicados: any = {
+      ...montarWhereBase(true),
+      status: 'ATIVO',
+    };
+
+    const whereProximosVencimento: any = {
+      ...montarWhereBase(true),
+
+      status: 'ATIVO',
+
+      dataProximaRevisao: {
+        gte: inicioHoje,
+        lte: fimProximosTrintaDias,
+      },
+    };
+
+    const whereVencidos: any = {
+      ...montarWhereBase(true),
+
+      status: 'ATIVO',
+
+      dataProximaRevisao: {
+        lt: inicioHoje,
+      },
+    };
+
+    /*
+     * Um documento obsoleto deve possuir status OBSOLETO.
+     *
+     * Não utilizamos ativo: true aqui porque, dependendo da sua
+     * regra de negócio, documentos obsoletos podem estar inativos.
+     */
+    const whereObsoletos: any = {
+      ...montarWhereBase(),
+      status: 'OBSOLETO',
+    };
+
+    const [
+      totalAtivos,
+      publicados,
+      proximosVencimento,
+      vencidos,
+      obsoletos,
+      proximasRevisoes,
+      distribuicaoStatus,
+      quantidadePorSetorAgrupada,
+      quantidadePorCategoriaAgrupada,
+      ultimosDocumentosPublicados,
+      pendenciasLeitura,
+    ] = await Promise.all([
+      /*
+       * Quantidade de documentos ativos.
+       */
+      this.prisma.documento.count({
+        where: whereAtivos,
+      }),
+
+      /*
+       * Quantidade de documentos publicados e vigentes.
+       */
+      this.prisma.documento.count({
+        where: wherePublicados,
+      }),
+
+      /*
+       * Documentos que vencerão nos próximos 30 dias.
+       */
+      this.prisma.documento.count({
+        where: whereProximosVencimento,
+      }),
+
+      /*
+       * Documentos cuja próxima revisão já venceu.
+       */
+      this.prisma.documento.count({
+        where: whereVencidos,
+      }),
+
+      /*
+       * Documentos marcados formalmente como obsoletos.
+       */
+      this.prisma.documento.count({
+        where: whereObsoletos,
+      }),
+
+      /*
+       * Lista das próximas revisões.
+       */
+      this.prisma.documento.findMany({
+        where: whereProximosVencimento,
+
+        select: {
+          id: true,
+          codigo: true,
+          nome: true,
+          setorResponsavel: true,
+          responsavelNome: true,
+          dataProximaRevisao: true,
+          versaoAtual: true,
+
+          DocumentoCategoria: {
+            select: {
+              id: true,
+              nome: true,
+            },
+          },
+        },
+
+        orderBy: {
+          dataProximaRevisao: 'asc',
+        },
+
+        take: 10,
+      }),
+
+      /*
+       * Distribuição geral dos documentos por status.
+       */
+      this.prisma.documento.groupBy({
+        by: ['status'],
+
+        where: montarWhereBase(),
+
+        _count: {
+          _all: true,
+        },
+
+        orderBy: {
+          status: 'asc',
+        },
+      }),
+
+      /*
+       * Quantidade de documentos ativos por setor.
+       */
+      this.prisma.documento.groupBy({
+        by: ['setorResponsavel'],
+
+        where: montarWhereBase(true),
+
+        _count: {
+          _all: true,
+        },
+
+        orderBy: {
+          _count: {
+            setorResponsavel: 'desc',
+          },
+        },
+      }),
+
+      /*
+       * Quantidade de documentos ativos por categoria.
+       */
+      this.prisma.documento.groupBy({
+        by: ['categoriaId'],
+
+        where: montarWhereBase(true),
+
+        _count: {
+          _all: true,
+        },
+
+        orderBy: {
+          _count: {
+            categoriaId: 'desc',
+          },
+        },
+      }),
+
+      /*
+       * Últimos documentos publicados.
+       */
+      this.prisma.documento.findMany({
+        where: wherePublicados,
+
+        select: {
+          id: true,
+          codigo: true,
+          nome: true,
+          descricao: true,
+          setorResponsavel: true,
+
+          responsavelId: true,
+          responsavelNome: true,
+          responsavelEmail: true,
+
+          dataPublicacao: true,
+          dataProximaRevisao: true,
+
+          versaoAtual: true,
+          status: true,
+          visibilidade: true,
+
+          DocumentoCategoria: {
+            select: {
+              id: true,
+              nome: true,
+            },
+          },
+
+          DocumentoVersao: {
+            where: {
+              vigente: true,
+            },
+
+            select: {
+              id: true,
+              versao: true,
+              nomeOriginal: true,
+              mimeType: true,
+              tamanho: true,
+              createdAt: true,
+            },
+
+            orderBy: {
+              createdAt: 'desc',
+            },
+
+            take: 1,
+          },
+        },
+
+        orderBy: {
+          dataPublicacao: 'desc',
+        },
+
+        take: 10,
+      }),
+
+      /*
+       * Leituras pendentes do usuário autenticado.
+       */
+      this.findPendentesLeitura(user),
+    ]);
+
+    /*
+     * Busca os nomes das categorias depois de obter os IDs
+     * retornados pelo agrupamento.
+     */
+    const idsCategorias = quantidadePorCategoriaAgrupada
+      .map((item) => item.categoriaId)
+      .filter((categoriaId): categoriaId is string => Boolean(categoriaId));
+
+    const categorias =
+      idsCategorias.length > 0
+        ? await this.prisma.documentoCategoria.findMany({
+            where: {
+              id: {
+                in: idsCategorias,
+              },
+            },
+
+            select: {
+              id: true,
+              nome: true,
+              ativo: true,
+            },
+          })
+        : [];
+
+    const categoriasMap = new Map(
+      categorias.map((categoria) => [categoria.id, categoria.nome]),
+    );
+
+    /*
+     * Formata os documentos próximos da revisão.
+     */
+    const proximasRevisoesFormatadas = proximasRevisoes.map((documento) => {
+      const dataRevisao = new Date(documento.dataProximaRevisao);
+
+      dataRevisao.setHours(0, 0, 0, 0);
+
+      const diasRestantes = Math.ceil(
+        (dataRevisao.getTime() - inicioHoje.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      return {
+        id: documento.id,
+        codigo: documento.codigo,
+        nome: documento.nome,
+
+        setor: documento.setorResponsavel,
+
+        responsavelNome: documento.responsavelNome,
+
+        versaoAtual: documento.versaoAtual,
+
+        dataProximaRevisao: documento.dataProximaRevisao,
+
+        dias: diasRestantes,
+
+        categoria: documento.DocumentoCategoria,
+      };
+    });
+
+    /*
+     * Formata a distribuição por status.
+     *
+     * O percentual utiliza todos os documentos retornados pela
+     * distribuição, incluindo obsoletos e inativos.
+     */
+    const totalDocumentosDistribuicao = distribuicaoStatus.reduce(
+      (acumulador, item) => acumulador + item._count._all,
+      0,
+    );
+
+    const documentosPorStatus = distribuicaoStatus.map((item) => {
+      const total = item._count._all;
+
+      const percentual =
+        totalDocumentosDistribuicao > 0
+          ? Number(((total / totalDocumentosDistribuicao) * 100).toFixed(1))
+          : 0;
+
+      return {
+        status: item.status,
+        total,
+        percentual,
+      };
+    });
+
+    /*
+     * Formata a quantidade por setor.
+     */
+    const quantidadePorSetor = quantidadePorSetorAgrupada.map((item) => {
+      const total = item._count._all;
+
+      const percentual =
+        totalAtivos > 0 ? Number(((total / totalAtivos) * 100).toFixed(1)) : 0;
+
+      return {
+        setor: item.setorResponsavel || 'Setor não informado',
+
+        total,
+        percentual,
+      };
+    });
+
+    /*
+     * Formata a quantidade por categoria.
+     */
+    const quantidadePorCategoria = quantidadePorCategoriaAgrupada.map(
+      (item) => {
+        const total = item._count._all;
+
+        const percentual =
+          totalAtivos > 0
+            ? Number(((total / totalAtivos) * 100).toFixed(1))
+            : 0;
+
+        return {
+          categoriaId: item.categoriaId,
+
+          categoria:
+            categoriasMap.get(item.categoriaId) || 'Categoria não identificada',
+
+          total,
+          percentual,
+        };
+      },
+    );
+
+    /*
+     * Ordena novamente depois da formatação para garantir
+     * que os maiores valores sejam exibidos primeiro.
+     */
+    quantidadePorSetor.sort(
+      (primeiro, segundo) => segundo.total - primeiro.total,
+    );
+
+    quantidadePorCategoria.sort(
+      (primeiro, segundo) => segundo.total - primeiro.total,
+    );
+
+    return {
+      status: 'sucesso',
+
+      indicadores: {
+        /*
+         * Indicadores exigidos pelo painel.
+         */
+        totalAtivos,
+        totalVencidos: vencidos,
+        totalObsoletos: obsoletos,
+
+        /*
+         * Quantidade de setores e categorias que possuem
+         * documentos ativos.
+         */
+        totalSetores: quantidadePorSetor.length,
+        totalCategorias: quantidadePorCategoria.length,
+
+        /*
+         * Indicadores complementares que já existiam.
+         */
+        publicados,
+        proximosVencimento,
+
+        /*
+         * Ainda não existe uma regra específica para
+         * documentos em revisão.
+         */
+        emRevisao: 0,
+
+        /*
+         * Mantidos também com os nomes antigos para evitar
+         * quebrar o frontend atual.
+         */
+        vencidos,
+        obsoletos,
+
+        /*
+         * Pendências do usuário autenticado.
+         */
+        leiturasPendentes: pendenciasLeitura.total || 0,
+      },
+
+      /*
+       * Quantidade de documentos ativos por setor.
+       */
+      quantidadePorSetor,
+
+      /*
+       * Quantidade de documentos ativos por categoria.
+       */
+      quantidadePorCategoria,
+
+      /*
+       * Documentos que vencem nos próximos 30 dias.
+       */
+      proximasRevisoes: proximasRevisoesFormatadas,
+
+      /*
+       * Distribuição de todos os documentos por status.
+       */
+      documentosPorStatus,
+
+      /*
+       * Últimos dez documentos publicados.
+       */
+      ultimosDocumentosPublicados,
+    };
+  }
+
   private normalizarComparacao(value: unknown): string {
     return String(value || '')
       .trim()
