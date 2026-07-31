@@ -78,16 +78,22 @@ export class GestaoDocumentosController {
   @ApiOperation({
     summary: 'Encontra todos os Documentos filtrando',
   })
-  async findByFilterDocumentos(@Body() body: any) {
-    return await this.gestaoDocumentosService.findByFilterDocumentos(body);
+  async findByFilterDocumentos(@Body() body: any, @User() user: any) {
+    return await this.gestaoDocumentosService.findByFilterDocumentos(
+      body,
+      user,
+    );
   }
 
   @Get('documento/find-by-setor/:setor')
   @ApiOperation({
     summary: 'Encontra todos os Documentos cadastrados pelo setor',
   })
-  async findDocumentosBySetor(@Param('setor') setor: any) {
-    return await this.gestaoDocumentosService.findDocumentosBySetor(setor);
+  async findDocumentosBySetor(@Param('setor') setor: any, @User() user: any) {
+    return await this.gestaoDocumentosService.findDocumentosBySetor(
+      setor,
+      user,
+    );
   }
 
   @Post('documento/find-by-setor-and-categoria/:setor/:categoriaId')
@@ -98,11 +104,13 @@ export class GestaoDocumentosController {
     @Param('setor') setor: string,
     @Param('categoriaId') categoriaId: string,
     @Body() body: any,
+    @User() user: any,
   ) {
     return await this.gestaoDocumentosService.findDocumentosBySetorAndCategoria(
       setor,
       categoriaId,
       body,
+      user,
     );
   }
 

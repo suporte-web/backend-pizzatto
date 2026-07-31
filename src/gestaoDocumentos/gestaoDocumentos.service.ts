@@ -409,7 +409,20 @@ export class GestaoDocumentosService {
     return categoria;
   }
 
-  async findByFilterDocumentos(body: any) {
+  async findByFilterDocumentos(body: any, user: any) {
+    const usuarioId = user?.objectGUID || user?.adObjectGuid || user?.sub || '';
+
+    const setorUsuario = user?.departamento || user?.department || '';
+
+    const rolesUsuario = Array.isArray(user?.roles)
+      ? user.roles
+      : [user?.role].filter(Boolean);
+
+    const rolesLiberadas = ['DESENVOLVIMENTO', 'QUALIDADE'];
+
+    const podeVisualizarTudo = rolesUsuario.some((role: string) =>
+      rolesLiberadas.includes(String(role).trim().toUpperCase()),
+    );
     const {
       pesquisa,
       categoriaId,
@@ -422,6 +435,9 @@ export class GestaoDocumentosService {
       dataPublicacaoFim,
       dataRevisaoInicio,
       dataRevisaoFim,
+      role,
+      roles,
+
       page = 1,
       limit = 10,
     } = body;
@@ -430,59 +446,126 @@ export class GestaoDocumentosService {
     const limitNumber = Math.max(Number(limit) || 10, 1);
     const skip = (pageNumber - 1) * limitNumber;
 
-    const where: any = {};
+    const where: any = {
+      AND: [],
+    };
 
+    /*
+     * Pesquisa textual
+     *
+     * Ela fica dentro de AND porque também teremos outro OR
+     * responsável pela permissão de acesso.
+     */
     if (pesquisa && String(pesquisa).trim()) {
       const termo = String(pesquisa).trim();
 
-      where.OR = [
-        {
-          nome: {
-            contains: termo,
-            mode: 'insensitive',
+      where.AND.push({
+        OR: [
+          {
+            nome: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          codigo: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            codigo: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          descricao: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            descricao: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          setorResponsavel: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            setorResponsavel: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          responsavelNome: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            responsavelNome: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          responsavelEmail: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            responsavelEmail: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          DocumentoCategoria: {
-            is: {
-              nome: {
-                contains: termo,
-                mode: 'insensitive',
+          {
+            DocumentoCategoria: {
+              is: {
+                nome: {
+                  contains: termo,
+                  mode: 'insensitive',
+                },
               },
             },
           },
-        },
-      ];
+        ],
+      });
+    }
+
+    /*
+     * Controle de acesso
+     *
+     * O documento será retornado quando:
+     * 1. For público;
+     * 2. Possuir liberação para todos;
+     * 3. Possuir liberação para o setor do usuário;
+     * 4. Possuir liberação direta para o usuário.
+     */
+
+    if (!podeVisualizarTudo) {
+      where.AND.push({
+        OR: [
+          {
+            visibilidade: 'PUBLICO',
+          },
+          {
+            DocumentoAcesso: {
+              some: {
+                tipo: 'TODOS',
+              },
+            },
+          },
+          ...(setorUsuario
+            ? [
+                {
+                  DocumentoAcesso: {
+                    some: {
+                      tipo: 'SETOR',
+                      valor: {
+                        equals: String(setorUsuario).trim(),
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
+          ...(usuarioId
+            ? [
+                {
+                  DocumentoAcesso: {
+                    some: {
+                      tipo: 'USUARIO',
+                      valor: {
+                        equals: String(usuarioId).trim(),
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
+        ],
+      });
     }
 
     if (categoriaId) {
@@ -525,7 +608,6 @@ export class GestaoDocumentosService {
         }
 
         inicio.setHours(0, 0, 0, 0);
-
         where.dataPublicacao.gte = inicio;
       }
 
@@ -539,7 +621,6 @@ export class GestaoDocumentosService {
         }
 
         fim.setHours(23, 59, 59, 999);
-
         where.dataPublicacao.lte = fim;
       }
     }
@@ -557,7 +638,6 @@ export class GestaoDocumentosService {
         }
 
         inicio.setHours(0, 0, 0, 0);
-
         where.dataProximaRevisao.gte = inicio;
       }
 
@@ -571,9 +651,15 @@ export class GestaoDocumentosService {
         }
 
         fim.setHours(23, 59, 59, 999);
-
         where.dataProximaRevisao.lte = fim;
       }
+    }
+
+    /*
+     * Remove o AND vazio, caso nenhuma condição tenha sido adicionada.
+     */
+    if (where.AND.length === 0) {
+      delete where.AND;
     }
 
     const [result, total] = await this.prisma.$transaction([
@@ -643,19 +729,36 @@ export class GestaoDocumentosService {
     };
   }
 
-  async findDocumentosBySetor(setor: string) {
-    if (!setor.trim()) {
+  async findDocumentosBySetor(setor: string, user: any) {
+    const setorNormalizado = String(setor || '').trim();
+
+    if (!setorNormalizado) {
       throw new BadRequestException('O setor responsável é obrigatório.');
     }
 
-    const result = await this.prisma.documento.findMany({
-      where: {
-        setorResponsavel: {
-          equals: setor.trim(),
-          mode: 'insensitive',
-        },
-        ativo: true,
+    const filtroAcesso = this.montarFiltroAcessoDocumentos(user);
+
+    const where: any = {
+      setorResponsavel: {
+        equals: setorNormalizado,
+        mode: 'insensitive',
       },
+
+      ativo: true,
+
+      AND: [],
+    };
+
+    if (filtroAcesso) {
+      where.AND.push(filtroAcesso);
+    }
+
+    if (where.AND.length === 0) {
+      delete where.AND;
+    }
+
+    const result = await this.prisma.documento.findMany({
+      where,
 
       include: {
         DocumentoCategoria: true,
@@ -666,11 +769,23 @@ export class GestaoDocumentosService {
           },
         },
 
-        DocumentoAcesso: true,
+        DocumentoAcesso: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
 
-        DocumentoLeitura: true,
+        DocumentoLeitura: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
 
-        DocumentoFavorito: true,
+        DocumentoFavorito: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
 
         _count: {
           select: {
@@ -702,6 +817,7 @@ export class GestaoDocumentosService {
     setor: string,
     categoriaId: string,
     body: any,
+    user: any,
   ) {
     const setorNormalizado = String(setor || '').trim();
     const categoriaIdNormalizado = String(categoriaId || '').trim();
@@ -717,10 +833,10 @@ export class GestaoDocumentosService {
     const { pesquisa, page = 1, limit = 10 } = body || {};
 
     const pageNumber = Math.max(Number(page) || 1, 1);
-
     const limitNumber = Math.max(Number(limit) || 10, 1);
-
     const skip = (pageNumber - 1) * limitNumber;
+
+    const filtroAcesso = this.montarFiltroAcessoDocumentos(user);
 
     const where: any = {
       setorResponsavel: {
@@ -731,53 +847,65 @@ export class GestaoDocumentosService {
       categoriaId: categoriaIdNormalizado,
 
       ativo: true,
+
+      AND: [],
     };
 
     if (pesquisa && String(pesquisa).trim()) {
       const termo = String(pesquisa).trim();
 
-      where.OR = [
-        {
-          nome: {
-            contains: termo,
-            mode: 'insensitive',
+      where.AND.push({
+        OR: [
+          {
+            nome: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          codigo: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            codigo: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          descricao: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            descricao: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          responsavelNome: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            responsavelNome: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          responsavelEmail: {
-            contains: termo,
-            mode: 'insensitive',
+          {
+            responsavelEmail: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          DocumentoVersao: {
-            some: {
-              nomeOriginal: {
-                contains: termo,
-                mode: 'insensitive',
+          {
+            DocumentoVersao: {
+              some: {
+                nomeOriginal: {
+                  contains: termo,
+                  mode: 'insensitive',
+                },
               },
             },
           },
-        },
-      ];
+        ],
+      });
+    }
+
+    if (filtroAcesso) {
+      where.AND.push(filtroAcesso);
+    }
+
+    if (where.AND.length === 0) {
+      delete where.AND;
     }
 
     const [result, total] = await this.prisma.$transaction([
@@ -796,11 +924,23 @@ export class GestaoDocumentosService {
             },
           },
 
-          DocumentoAcesso: true,
+          DocumentoAcesso: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
 
-          DocumentoLeitura: true,
+          DocumentoLeitura: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
 
-          DocumentoFavorito: true,
+          DocumentoFavorito: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
 
           _count: {
             select: {
@@ -1283,9 +1423,23 @@ export class GestaoDocumentosService {
   }
 
   async findFavoritos(body: any, user: any) {
-    const colaboradorId = user.objectGUID || user.adObjectGuid;
+    const colaboradorId = String(
+      user?.objectGUID || user?.adObjectGuid || user?.objectGuid || '',
+    ).trim();
 
-    const { pesquisa, page = 1, limit = 12 } = body;
+    if (!colaboradorId) {
+      throw new BadRequestException(
+        'Não foi possível identificar o colaborador.',
+      );
+    }
+
+    const { pesquisa, page = 1, limit = 12 } = body || {};
+
+    const pageNumber = Math.max(Number(page) || 1, 1);
+    const limitNumber = Math.max(Number(limit) || 12, 1);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const filtroAcesso = this.montarFiltroAcessoDocumentos(user);
 
     const where: any = {
       ativo: true,
@@ -1295,49 +1449,91 @@ export class GestaoDocumentosService {
           colaboradorId,
         },
       },
+
+      AND: [],
     };
 
-    if (pesquisa?.trim()) {
-      where.OR = [
-        {
-          nome: {
-            contains: pesquisa,
-            mode: 'insensitive',
+    if (pesquisa && String(pesquisa).trim()) {
+      const termo = String(pesquisa).trim();
+
+      where.AND.push({
+        OR: [
+          {
+            nome: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          codigo: {
-            contains: pesquisa,
-            mode: 'insensitive',
+          {
+            codigo: {
+              contains: termo,
+              mode: 'insensitive',
+            },
           },
-        },
-        {
-          DocumentoCategoria: {
-            is: {
-              nome: {
-                contains: pesquisa,
-                mode: 'insensitive',
+          {
+            descricao: {
+              contains: termo,
+              mode: 'insensitive',
+            },
+          },
+          {
+            DocumentoCategoria: {
+              is: {
+                nome: {
+                  contains: termo,
+                  mode: 'insensitive',
+                },
               },
             },
           },
-        },
-      ];
+        ],
+      });
+    }
+
+    /*
+     * DESENVOLVIMENTO e QUALIDADE recebem null no filtro
+     * e, portanto, visualizam todos os seus favoritos.
+     *
+     * Os demais usuários respeitam DocumentoAcesso.
+     */
+    if (filtroAcesso) {
+      where.AND.push(filtroAcesso);
+    }
+
+    if (where.AND.length === 0) {
+      delete where.AND;
     }
 
     const [result, total] = await this.prisma.$transaction([
       this.prisma.documento.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip,
+        take: limitNumber,
 
         include: {
           DocumentoCategoria: true,
+
           DocumentoVersao: {
             orderBy: {
               createdAt: 'desc',
             },
           },
-          DocumentoFavorito: true,
+
+          DocumentoAcesso: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
+
+          /*
+           * Retorna apenas o favorito do usuário atual,
+           * em vez de todos os favoritos do documento.
+           */
+          DocumentoFavorito: {
+            where: {
+              colaboradorId,
+            },
+          },
         },
 
         orderBy: {
@@ -1353,6 +1549,9 @@ export class GestaoDocumentosService {
     return {
       result,
       total,
+      page: pageNumber,
+      limit: limitNumber,
+      totalPages: Math.ceil(total / limitNumber),
     };
   }
 
@@ -1780,7 +1979,9 @@ export class GestaoDocumentosService {
   }
 
   async visualizarAceites(idDocumento: string) {
-    return await this.prisma.documentoLeitura.findMany({ where: { documentoId: idDocumento } });
+    return await this.prisma.documentoLeitura.findMany({
+      where: { documentoId: idDocumento },
+    });
   }
 
   private normalizarComparacao(value: unknown): string {
@@ -1789,5 +1990,78 @@ export class GestaoDocumentosService {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
+  }
+
+  private montarFiltroAcessoDocumentos(user: any) {
+    const rolesLiberadas = ['DESENVOLVIMENTO', 'QUALIDADE'];
+
+    const rolesUsuario = Array.isArray(user?.roles)
+      ? user.roles
+      : [user?.role].filter(Boolean);
+
+    const podeVisualizarTudo = rolesUsuario.some((role: string) =>
+      rolesLiberadas.includes(String(role).trim().toUpperCase()),
+    );
+
+    if (podeVisualizarTudo) {
+      return null;
+    }
+
+    const usuarioId = String(
+      user?.objectGUID ||
+        user?.adObjectGuid ||
+        user?.objectGuid ||
+        user?.sub ||
+        '',
+    ).trim();
+
+    const setorUsuario = String(
+      user?.departamento || user?.department || user?.setor || '',
+    ).trim();
+
+    const permissoes: any[] = [
+      {
+        visibilidade: 'PUBLICO',
+      },
+      {
+        DocumentoAcesso: {
+          some: {
+            tipo: 'TODOS',
+          },
+        },
+      },
+    ];
+
+    if (setorUsuario) {
+      permissoes.push({
+        DocumentoAcesso: {
+          some: {
+            tipo: 'SETOR',
+            valor: {
+              equals: setorUsuario,
+              mode: 'insensitive',
+            },
+          },
+        },
+      });
+    }
+
+    if (usuarioId) {
+      permissoes.push({
+        DocumentoAcesso: {
+          some: {
+            tipo: 'USUARIO',
+            valor: {
+              equals: usuarioId,
+              mode: 'insensitive',
+            },
+          },
+        },
+      });
+    }
+
+    return {
+      OR: permissoes,
+    };
   }
 }

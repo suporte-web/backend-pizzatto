@@ -21,6 +21,7 @@ import { RecrutamentoInternoModule } from './recrutamentoInterno/recrutamentoInt
 import { RecrutamentoInternoCandidatoModule } from './recrutamentoInternoCandidato/recrutamentoInternoCandidato.module';
 import { MotivosReprovacaoModule } from './motivosReprovacao/motivosReprovacao.module';
 import { GestaoDocumentosModule } from './gestaoDocumentos/gestaoDocumentos.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { GestaoDocumentosModule } from './gestaoDocumentos/gestaoDocumentos.modu
     RecrutamentoInternoCandidatoModule,
     MotivosReprovacaoModule,
     GestaoDocumentosModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],
