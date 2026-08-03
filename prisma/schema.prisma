@@ -713,6 +713,22 @@ model DocumentoVersao {
   @@index([documentoId, vigente])
 }
 
+model RecrutamentoInternoCasesSucesso {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  titulo      String
+  descricao   String?
+  arquivos    Json?
+  ativo       Boolean  @default(true)
+  criadoPorId String?
+  criadoPor   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([ativo])
+  @@index([createdAt])
+  @@index([titulo])
+}
+
 enum Area {
   Sistemas
   Infra
