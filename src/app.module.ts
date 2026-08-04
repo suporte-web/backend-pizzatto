@@ -23,6 +23,7 @@ import { MotivosReprovacaoModule } from './motivosReprovacao/motivosReprovacao.m
 import { GestaoDocumentosModule } from './gestaoDocumentos/gestaoDocumentos.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CasesSucessoModule } from './casesSucesso/casesSucesso.module';
+import { BeneficiosModule } from './beneficios/beneficios.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { CasesSucessoModule } from './casesSucesso/casesSucesso.module';
     MotivosReprovacaoModule,
     GestaoDocumentosModule,
     CasesSucessoModule,
+    BeneficiosModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
