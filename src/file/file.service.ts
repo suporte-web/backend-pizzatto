@@ -70,7 +70,7 @@ export class FileService {
         uploadDate: new Date(),
         folder: folder,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(`Erro ao salvar arquivo: ${error.message}`);
     }
   }
@@ -119,7 +119,7 @@ export class FileService {
         total: fileDetails.length,
         folder: folder,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `Erro ao listar arquivos: ${error.message}`,
       );
@@ -143,7 +143,7 @@ export class FileService {
         success: true,
         folders: folders.sort(),
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(`Erro ao listar pastas: ${error.message}`);
     }
   }
@@ -171,7 +171,7 @@ export class FileService {
           folder: folder,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw new NotFoundException('Arquivo não encontrado');
       }
@@ -202,7 +202,7 @@ export class FileService {
           folder: folder,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw new NotFoundException('Arquivo não encontrado');
       }
@@ -225,7 +225,7 @@ export class FileService {
         success: true,
         message: 'Arquivo deletado com sucesso',
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw new NotFoundException('Arquivo não encontrado');
       }
@@ -244,7 +244,7 @@ export class FileService {
         success: true,
         message: `Pasta '${folderName}' criada com sucesso`,
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(`Erro ao criar pasta: ${error.message}`);
     }
   }
@@ -268,7 +268,7 @@ export class FileService {
         success: true,
         message: `Pasta '${folderName}' deletada com sucesso`,
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw new NotFoundException('Pasta não encontrada');
       }
@@ -409,7 +409,7 @@ export class FileService {
         uploadDate: new Date(),
         folder: folder,
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw new NotFoundException('Arquivo não encontrado');
       }
@@ -439,7 +439,7 @@ export class FileService {
           folder: result.folder,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `Erro ao converter e visualizar arquivo: ${error.message}`,
       );
@@ -523,7 +523,7 @@ export class FileService {
           folder: folder,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         throw new NotFoundException('Arquivo não encontrado');
       }
