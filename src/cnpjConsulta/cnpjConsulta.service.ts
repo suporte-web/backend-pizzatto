@@ -28,7 +28,6 @@ export interface ConsultaCnpjAgregada {
   consultas: {
     receita: ResultadoFonte<Record<string, any>>;
     simples: ResultadoFonte<Record<string, any>>;
-    certidaoFederal: ResultadoFonte<Record<string, any>>;
     reclameAqui: ResultadoFonte<Record<string, any>>;
     datajud: ResultadoFonte<Record<string, any>>;
   };
@@ -400,139 +399,299 @@ export class CnpjConsultaService {
     );
   }
 
-  private async obterTokenSerpro(): Promise<string | null> {
-    if (process.env.SERPRO_BEARER_TOKEN) {
-      return process.env.SERPRO_BEARER_TOKEN;
+  private obterListaDataHub(resposta: any): any[] {
+    if (Array.isArray(resposta)) {
+      return resposta;
     }
 
-    const consumerKey = process.env.SERPRO_CONSUMER_KEY;
-    const consumerSecret = process.env.SERPRO_CONSUMER_SECRET;
+    if (Array.isArray(resposta?.data)) {
+      return resposta.data;
+    }
 
-    if (!consumerKey || !consumerSecret) {
+    if (Array.isArray(resposta?.result)) {
+      return resposta.result;
+    }
+
+    if (Array.isArray(resposta?.results)) {
+      return resposta.results;
+    }
+
+    if (Array.isArray(resposta?.items)) {
+      return resposta.items;
+    }
+
+    return [];
+  }
+
+  private obterCompanyIdDataHub(empresa: any): string | null {
+    const valor =
+      empresa?.company_id ?? empresa?.companyId ?? empresa?.id ?? null;
+
+    if (valor === null || valor === undefined) {
       return null;
     }
 
-    const tokenUrl =
-      process.env.SERPRO_TOKEN_URL ??
-      'https://gateway.apiserpro.serpro.gov.br/token';
-    const basic = Buffer.from(`${consumerKey}:${consumerSecret}`).toString(
-      'base64',
-    );
+    const companyId = String(valor).trim();
 
-    const token = await this.fetchJson(
-      tokenUrl,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${basic}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'grant_type=client_credentials',
-      },
-      15000,
-    );
-
-    return token?.access_token ?? null;
+    return companyId || null;
   }
 
-  private async consultarCnd(
+  private async consultarReclameAqui(
     cnpj: string,
   ): Promise<ResultadoFonte<Record<string, any>>> {
-    const urlTemplate = process.env.SERPRO_CND_URL;
+    const fonte = 'Reclame AQUI Data Hub';
 
-    if (!urlTemplate) {
+    const apiKey = String(
+      process.env.RECLAME_AQUI_DATAHUB_API_KEY ?? '',
+    ).trim();
+
+    const baseUrl = String(
+      process.env.RECLAME_AQUI_DATAHUB_URL ??
+        'https://api-reputacao.obviobrasil.com.br',
+    )
+      .trim()
+      .replace(/\/$/, '');
+
+    if (!apiKey) {
       return this.resultadoFonte<Record<string, any>>(
-        'SERPRO Consulta CND',
+        fonte,
         'NAO_CONFIGURADA',
         null,
-        'Defina SERPRO_CND_URL com a URL contratada, usando {cnpj} como marcador.',
+        'Configure RECLAME_AQUI_DATAHUB_API_KEY.',
       );
     }
 
-    try {
-      const token = await this.obterTokenSerpro();
+    const cnpjLimpo = this.limparCnpj(cnpj);
 
-      if (!token) {
+    try {
+      /*
+       * 1. Localiza a(s) página(s) da empresa pelo CNPJ.
+       *
+       * Documentação:
+       * GET /api/v1/company/{FILTRO}
+       */
+      const respostaEmpresas = await this.fetchJson(
+        `${baseUrl}/api/v1/company/${encodeURIComponent(
+          cnpjLimpo,
+        )}?page=1&pageSize=100`,
+        {
+          headers: {
+            Authentication: apiKey,
+          },
+        },
+      );
+
+      const empresas = this.obterListaDataHub(respostaEmpresas);
+
+      if (empresas.length === 0) {
+        return this.resultadoFonte<Record<string, any>>(fonte, 'SUCESSO', {
+          encontrado: false,
+          cnpj: cnpjLimpo,
+          paginasEncontradas: 0,
+          reputacoes: [],
+        });
+      }
+
+      /*
+       * Um mesmo CNPJ pode possuir mais de uma página
+       * no Reclame AQUI.
+       */
+      const paginas = empresas
+        .map((empresa: any) => ({
+          companyId: this.obterCompanyIdDataHub(empresa),
+
+          cnpj: empresa?.cnpj ?? empresa?.document ?? null,
+
+          nome:
+            empresa?.nome_empresa ??
+            empresa?.name ??
+            empresa?.company_name ??
+            null,
+
+          nomeFantasia: empresa?.nome_fantasia ?? empresa?.trade_name ?? null,
+
+          shortName: empresa?.short_name ?? empresa?.shortName ?? null,
+
+          respostaOriginal: empresa,
+        }))
+        .filter((empresa: any) => Boolean(empresa.companyId));
+
+      const companyIds = [
+        ...new Set(
+          paginas
+            .map((pagina: any) => String(pagina.companyId))
+            .filter(Boolean),
+        ),
+      ];
+
+      if (companyIds.length === 0) {
         return this.resultadoFonte<Record<string, any>>(
-          'SERPRO Consulta CND',
-          'NAO_CONFIGURADA',
-          null,
-          'Configure SERPRO_BEARER_TOKEN ou SERPRO_CONSUMER_KEY e SERPRO_CONSUMER_SECRET.',
+          fonte,
+          'ERRO',
+          {
+            encontrado: true,
+            cnpj: cnpjLimpo,
+            paginasEncontradas: empresas.length,
+            paginas,
+          },
+          'O Reclame AQUI encontrou a empresa, mas não retornou nenhum company_id.',
         );
       }
 
-      const dados = await this.fetchJson(
-        this.preencherTemplateUrl(urlTemplate, cnpj),
+      /*
+       * 2. Consulta a reputação.
+       *
+       * "365" = últimos 365 dias.
+       *
+       * Outros intervalos documentados:
+       * 180
+       * 365
+       * last_year
+       * current_year
+       * YYYY-MM
+       */
+      const respostaReputacao = await this.fetchJson(
+        `${baseUrl}/api/v1/reputation?page=1&pageSize=100`,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          method: 'POST',
+
+          headers: {
+            Authentication: apiKey,
+            'Content-Type': 'application/json',
+          },
+
+          body: JSON.stringify({
+            interval: process.env.RECLAME_AQUI_DATAHUB_INTERVAL ?? '365',
+
+            companyId: companyIds,
+          }),
         },
+        30000,
       );
 
-      return this.resultadoFonte<Record<string, any>>(
-        'SERPRO Consulta CND',
-        'SUCESSO',
-        dados,
-      );
+      const reputacoes = this.obterListaDataHub(respostaReputacao);
+
+      const reputacoesNormalizadas = reputacoes.map((item: any) => ({
+        companyId: item?.company_id ?? item?.companyId ?? null,
+
+        cnpj: item?.cnpj ?? cnpjLimpo,
+
+        nome: item?.nome_empresa ?? null,
+
+        nomeFantasia: item?.nome_fantasia ?? null,
+
+        indiceReputacao: item?.indice_reputacao ?? null,
+
+        notaMediaConsumidores: item?.nota_media_consumidores ?? null,
+
+        percentualResolvidas: item?.percent_reclamacao_resolvida ?? null,
+
+        percentualRespondidas: item?.percent_reclamacao_respondida ?? null,
+
+        percentualVoltariaFazerNegocio:
+          item?.percent_voltaria_fazer_negocio ?? null,
+
+        reclamacoesRecebidas: item?.volume_reclamacao_recebida ?? null,
+
+        reclamacoesAvaliadas: item?.volume_reclamacao_avaliadas ?? null,
+
+        aguardandoResposta:
+          item?.volume_reclamacoes_aguardando_resposta ?? null,
+
+        tempoMedioRespostaDias: item?.tempo_medio_respostas_dias ?? null,
+
+        tempoMedioResolucaoDias: item?.tempo_medio_resolucao_dias ?? null,
+
+        segmento: item?.segmento ?? null,
+
+        subsegmento: item?.subsegmento ?? null,
+
+        porte: item?.porte ?? null,
+
+        seloRav: item?.selo_verificacao_rav ?? null,
+
+        ra1000SeisMeses: item?.ra1000_seis_meses ?? null,
+
+        ra1000DozeMeses: item?.ra1000_doze_meses ?? null,
+
+        periodoExtracao: item?.periodo_extracao ?? null,
+
+        dataExtracao: item?.data_extracao ?? null,
+
+        topProblemas: item?.top_3_diderot_problema ?? null,
+      }));
+
+      return this.resultadoFonte<Record<string, any>>(fonte, 'SUCESSO', {
+        encontrado: true,
+
+        cnpj: cnpjLimpo,
+
+        paginasEncontradas: paginas.length,
+
+        paginas,
+
+        intervalo: process.env.RECLAME_AQUI_DATAHUB_INTERVAL ?? '365',
+
+        reputacoes: reputacoesNormalizadas,
+
+        /*
+         * Facilita o frontend quando existe apenas
+         * uma página associada ao CNPJ.
+         */
+        reputacao:
+          reputacoesNormalizadas.length === 1
+            ? reputacoesNormalizadas[0]
+            : null,
+      });
     } catch (error: any) {
-      return this.resultadoFonte<Record<string, any>>(
-        'SERPRO Consulta CND',
-        Number(error?.status) >= 500 ? 'INDISPONIVEL' : 'ERRO',
-        null,
-        error?.message || 'Não foi possível consultar a certidão federal.',
-      );
-    }
-  }
+      const status = Number(error?.status);
 
-  private async consultarApiContratada(
-    fonte: string,
-    urlTemplate: string | undefined,
-    token: string | undefined,
-    cnpj: string,
-    tokenEnvName: string,
-  ): Promise<ResultadoFonte<Record<string, any>>> {
-    if (!urlTemplate) {
+      console.error('[Reclame AQUI Data Hub] Erro', {
+        cnpj: cnpjLimpo,
+        status,
+        message: error?.message,
+        responseBody: error?.responseBody ?? null,
+      });
+
+      if (status === 401 || status === 403) {
+        return this.resultadoFonte<Record<string, any>>(
+          fonte,
+          'ERRO',
+          null,
+          'A APIKey do Reclame AQUI Data Hub foi recusada ou não possui permissão para esta operação.',
+        );
+      }
+
+      if (status === 404) {
+        return this.resultadoFonte<Record<string, any>>(fonte, 'SUCESSO', {
+          encontrado: false,
+          cnpj: cnpjLimpo,
+          paginasEncontradas: 0,
+          reputacoes: [],
+        });
+      }
+
+      if (
+        status === 429 ||
+        status >= 500 ||
+        error?.code === 'EXTERNAL_TIMEOUT'
+      ) {
+        return this.resultadoFonte<Record<string, any>>(
+          fonte,
+          'INDISPONIVEL',
+          null,
+          error?.message ||
+            'O Reclame AQUI Data Hub está temporariamente indisponível.',
+        );
+      }
+
       return this.resultadoFonte<Record<string, any>>(
         fonte,
-        'NAO_CONFIGURADA',
+        'ERRO',
         null,
-        `Configure a URL da integração contratada usando {cnpj} como marcador.`,
+        error?.message || 'Não foi possível consultar o Reclame AQUI Data Hub.',
       );
     }
-
-    if (!token) {
-      return this.resultadoFonte<Record<string, any>>(
-        fonte,
-        'NAO_CONFIGURADA',
-        null,
-        `Configure ${tokenEnvName}.`,
-      );
-    }
-
-    try {
-      const dados = await this.fetchJson(
-        this.preencherTemplateUrl(urlTemplate, cnpj),
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-
-      return this.resultadoFonte<Record<string, any>>(fonte, 'SUCESSO', dados);
-    } catch (error: any) {
-      return this.resultadoFonte<Record<string, any>>(
-        fonte,
-        Number(error?.status) >= 500 ? 'INDISPONIVEL' : 'ERRO',
-        null,
-        error?.message || `Não foi possível consultar ${fonte}.`,
-      );
-    }
-  }
-
-  private consultarReclameAqui(cnpj: string) {
-    return this.consultarApiContratada(
-      'Reclame AQUI API',
-      process.env.RECLAME_AQUI_API_URL,
-      process.env.RECLAME_AQUI_API_TOKEN,
-      cnpj,
-      'RECLAME_AQUI_API_TOKEN',
-    );
   }
 
   private obterProcessosDatajudConfigurados(
@@ -761,37 +920,39 @@ export class CnpjConsultaService {
       throw new BadRequestException('O CNPJ informado é inválido.');
     }
 
+    // 1. Consulta primeiro a Receita
     const receita = await this.consultarReceita(cnpjLimpo);
-    const simples = this.consultarSimples(receita);
 
-    const [certidaoFederal, reclameAqui, datajud] = await Promise.all([
-      this.consultarCnd(cnpjLimpo),
-      this.consultarReclameAqui(cnpjLimpo),
-      this.consultarDatajud(cnpjLimpo),
-    ]);
-
+    // 2. Garante que temos os dados cadastrais
     if (receita.status !== 'SUCESSO' || !receita.dados) {
       throw new ServiceUnavailableException({
         message: 'Não foi possível obter os dados cadastrais do CNPJ.',
         cnpj: cnpjLimpo,
-        consultas: { receita, simples, certidaoFederal, reclameAqui, datajud },
+        consultas: {
+          receita,
+        },
       });
     }
+
+    const simples = this.consultarSimples(receita);
+
+    const [reclameAqui, datajud] = await Promise.all([
+      this.consultarReclameAqui(cnpjLimpo),
+      this.consultarDatajud(cnpjLimpo),
+    ]);
 
     return {
       cnpj: cnpjLimpo,
 
-      // Mantém compatibilidade com o frontend atual.
       data: receita.dados,
 
-      // Novo retorno agregado por fonte.
       consultas: {
         receita,
         simples,
-        certidaoFederal,
         reclameAqui,
         datajud,
       },
+
       consultadoEm: new Date().toISOString(),
     };
   }
