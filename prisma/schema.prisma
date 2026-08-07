@@ -64,6 +64,7 @@ model Mural {
   youtubeUrl          String?
   blur                Boolean            @default(false)
   MuralComentario     MuralComentario[]
+  MuralImagem         MuralImagem[]
   MuralLike           MuralLike[]
   MuralVisualizado    MuralVisualizado[]
 }
@@ -740,6 +741,149 @@ model Beneficio {
   updatedAt DateTime @default(now()) @db.Timestamp(6)
 }
 
+model MuralImagem {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  muralId       String   @db.Uuid
+  caminhoImagem String?
+  ordem         Int      @default(0)
+  createdAt     DateTime @default(now()) @db.Timestamp(6)
+  Mural         Mural    @relation(fields: [muralId], references: [id], onDelete: Cascade)
+
+  @@unique([muralId, ordem])
+  @@index([muralId])
+}
+
+model CnpjConsulta {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cnpj                 String
+  consultadoEm         DateTime              @default(now()) @db.Timestamp(6)
+  pontuacao            Int                   @default(0)
+  resultado            ResultadoHomologacao  @default(ANALISE_MANUAL)
+  observacao           String?
+  createdAt            DateTime              @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime              @default(now()) @db.Timestamp(6)
+  CnpjCertidao         CnpjCertidao[]
+  CnpjDadosConsultados CnpjDadosConsultados?
+
+  @@index([cnpj])
+  @@index([consultadoEm])
+  @@index([resultado])
+}
+
+model CnpjDadosConsultados {
+  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  consultaId              String               @unique @db.Uuid
+  consultadoPorObjectGuid String?
+  consultadoPorNome       String
+  consultadoPorUsuario    String?
+  razaoSocial             String
+  nomeFantasia            String?
+  situacaoCadastral       String?
+  dataAbertura            DateTime?            @db.Date
+  cnaePrincipalCodigo     String?
+  cnaePrincipalDescricao  String?
+  simplesNacional         String?
+  inscricaoEstadual       String?
+  logradouro              String?
+  numero                  String?
+  complemento             String?
+  bairro                  String?
+  municipio               String?
+  uf                      String?
+  cep                     String?
+  respostaOriginal        Json?
+  createdAt               DateTime             @default(now()) @db.Timestamp(6)
+  updatedAt               DateTime             @default(now()) @db.Timestamp(6)
+  capitalSocial           Decimal?             @db.Decimal(18, 2)
+  codigoNaturezaJuridica  String?
+  dataSituacaoCadastral   DateTime?            @db.Date
+  descricaoPorte          String?
+  email                   String?
+  fax                     String?
+  matrizFilial            String?
+  motivoSituacaoCadastral String?
+  naturezaJuridica        String?
+  opcaoPeloMei            Boolean?
+  opcaoPeloSimples        Boolean?
+  pais                    String?
+  porte                   String?
+  situacaoEspecial        String?
+  telefone1               String?
+  telefone2               String?
+  CnpjCnaeSecundario      CnpjCnaeSecundario[]
+  CnpjConsulta            CnpjConsulta         @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  CnpjSocio               CnpjSocio[]
+
+  @@index([consultadoPorObjectGuid])
+  @@index([consultadoPorUsuario])
+  @@index([razaoSocial])
+  @@index([situacaoCadastral])
+  @@index([cnaePrincipalCodigo])
+  @@index([uf])
+}
+
+model CnpjCertidao {
+  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  consultaId              String               @db.Uuid
+  tipo                    TipoCertidaoCnpj     @default(FEDERAL)
+  situacao                SituacaoCertidaoCnpj @default(PENDENTE)
+  nomeOriginal            String?
+  nomeSalvo               String?
+  caminho                 String?
+  mimeType                String?
+  tamanho                 Int?
+  emitidaEm               DateTime?            @db.Date
+  validaAte               DateTime?            @db.Date
+  numeroControle          String?
+  observacao              String?
+  adicionadoPorObjectGuid String?
+  adicionadoPorNome       String?
+  adicionadoPorUsuario    String?
+  createdAt               DateTime             @default(now()) @db.Timestamp(6)
+  updatedAt               DateTime             @default(now()) @db.Timestamp(6)
+  CnpjConsulta            CnpjConsulta         @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+
+  @@index([consultaId])
+  @@index([situacao])
+  @@index([tipo])
+  @@index([validaAte])
+}
+
+model CnpjCnaeSecundario {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dadosConsultadosId   String               @db.Uuid
+  codigo               String
+  descricao            String
+  createdAt            DateTime             @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime             @default(now()) @db.Timestamp(6)
+  CnpjDadosConsultados CnpjDadosConsultados @relation(fields: [dadosConsultadosId], references: [id], onDelete: Cascade)
+
+  @@unique([dadosConsultadosId, codigo])
+  @@index([codigo])
+}
+
+model CnpjSocio {
+  id                        String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dadosConsultadosId        String               @db.Uuid
+  nome                      String
+  documento                 String?
+  qualificacao              String?
+  codigoQualificacao        String?
+  identificadorSocio        String?
+  faixaEtaria               String?
+  dataEntradaSociedade      DateTime?            @db.Date
+  nomeRepresentante         String?
+  documentoRepresentante    String?
+  qualificacaoRepresentante String?
+  pais                      String?
+  createdAt                 DateTime             @default(now()) @db.Timestamp(6)
+  updatedAt                 DateTime             @default(now()) @db.Timestamp(6)
+  CnpjDadosConsultados      CnpjDadosConsultados @relation(fields: [dadosConsultadosId], references: [id], onDelete: Cascade)
+
+  @@index([dadosConsultadosId])
+  @@index([nome])
+}
+
 enum Area {
   Sistemas
   Infra
@@ -774,4 +918,28 @@ enum TipoMissao {
   UNICA
   DIARIA
   SEMANAL
+}
+
+enum ResultadoHomologacao {
+  APROVADO
+  APROVADO_COM_RESSALVAS
+  ANALISE_MANUAL
+  REPROVADO
+}
+
+enum SituacaoCertidaoCnpj {
+  PENDENTE
+  NEGATIVA
+  POSITIVA_COM_EFEITO_NEGATIVA
+  POSITIVA
+  VENCIDA
+}
+
+enum TipoCertidaoCnpj {
+  FEDERAL
+  ESTADUAL
+  MUNICIPAL
+  TRABALHISTA
+  FGTS
+  OUTRA
 }

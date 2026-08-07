@@ -53,7 +53,7 @@ export class CasesSucessoController {
 
       limits: {
         files: 10,
-        fileSize: 15 * 1024 * 1024,
+        // fileSize: 250 * 1024 * 1024,
       },
 
       fileFilter: (_request, file, callback) => {

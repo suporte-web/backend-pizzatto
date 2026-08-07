@@ -12,7 +12,7 @@ import { ContasOfficeService } from './contasOffice.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
-@ApiTags('ContasOffice')
+@ApiTags('Contas Office')
 @Controller('contas-office')
 @UseGuards(AuthGuard)
 export class ContasOfficeController {
