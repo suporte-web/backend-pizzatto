@@ -25,6 +25,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CasesSucessoModule } from './casesSucesso/casesSucesso.module';
 import { BeneficiosModule } from './beneficios/beneficios.module';
 import { CnpjConsultaModule } from './cnpjConsulta/cnpjConsulta.module';
+import { KmmDatabaseModule } from './database/kmm/kmm-database.module';
+import { AniversariantesKmmModule } from './aniversariantesKmm/aniversariantesKmm.module';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { CnpjConsultaModule } from './cnpjConsulta/cnpjConsulta.module';
     CasesSucessoModule,
     BeneficiosModule,
     CnpjConsultaModule,
+    KmmDatabaseModule,
+    AniversariantesKmmModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
