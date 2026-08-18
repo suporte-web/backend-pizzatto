@@ -17,7 +17,7 @@ export class AniversariantesKmmService {
     SELECT
       P."COD_PESSOA",
       PF."NOME",
-      PF."DATA_NASCIMENTO",
+      TO_CHAR(PF."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
       M."DESCRICAO" AS "MODALIDADE",
       PMS."DESCRICAO" AS "SITUACAO"
 
