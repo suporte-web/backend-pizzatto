@@ -8,6 +8,10 @@ import {
 } from '@nestjs/common';
 import { unlink } from 'fs/promises';
 
+import { Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
+
 export type FonteStatus =
   | 'SUCESSO'
   | 'INDISPONIVEL'
@@ -30,8 +34,19 @@ export interface ConsultaCnpjAgregada {
     simples: ResultadoFonte<Record<string, any>>;
     reclameAqui: ResultadoFonte<Record<string, any>>;
     datajud: ResultadoFonte<Record<string, any>>;
+    certidaoFederal: ResultadoFonte<Record<string, any>>;
+    certidaoEstadual: ResultadoFonte<Record<string, any>>;
   };
   consultadoEm: string;
+}
+
+interface PortalCertidaoEstadual {
+  uf: string;
+  nome: string;
+  portalOficial: string;
+  consultaAutomatica: boolean;
+  requerCaptcha?: boolean;
+  observacao?: string;
 }
 
 @Injectable()
@@ -260,9 +275,9 @@ export class CnpjConsultaService {
     };
   }
 
-  private preencherTemplateUrl(template: string, cnpj: string): string {
-    return template.replace(/\{cnpj\}/gi, encodeURIComponent(cnpj));
-  }
+  // private preencherTemplateUrl(template: string, cnpj: string): string {
+  //   return template.replace(/\{cnpj\}/gi, encodeURIComponent(cnpj));
+  // }
 
   private async fetchJson(
     url: string,
@@ -909,6 +924,374 @@ export class CnpjConsultaService {
     }
   }
 
+  private consultarCertidaoFederal(
+    cnpj: string,
+  ): ResultadoFonte<Record<string, any>> {
+    const cnpjLimpo = this.limparCnpj(cnpj);
+
+    return this.consultarCertidaoFederalManual(cnpjLimpo);
+  }
+
+  private consultarCertidaoFederalManual(
+    cnpj: string,
+  ): ResultadoFonte<Record<string, any>> {
+    return this.resultadoFonte('Receita Federal / PGFN', 'SUCESSO', {
+      cnpj,
+
+      provedor: 'MANUAL',
+
+      consultaAutomatica: false,
+
+      documentoDisponivel: false,
+
+      requerInteracaoUsuario: true,
+
+      situacao: 'CONSULTA_MANUAL',
+
+      observacao:
+        'Não há provedor automático de Certidão Federal configurado. A emissão deve ser realizada manualmente no portal oficial.',
+
+      portalOficial:
+        'https://www.gov.br/pt-br/servicos/emitir-certidao-de-regularidade-fiscal',
+    });
+  }
+
+  private obterPortalCertidaoEstadual(
+    uf: string,
+  ): PortalCertidaoEstadual | null {
+    const ufNormalizada = String(uf ?? '')
+      .trim()
+      .toUpperCase();
+
+    const portais: Record<string, PortalCertidaoEstadual> = {
+      AC: {
+        uf: 'AC',
+        nome: 'SEFAZ Acre',
+        portalOficial:
+          'https://www.ac.gov.br/servico/certidao-negativa-de-debito-sefaz',
+        consultaAutomatica: false,
+        observacao:
+          'Serviço oficial de Certidão Negativa de Débitos da SEFAZ do Acre.',
+      },
+
+      AL: {
+        uf: 'AL',
+        nome: 'SEFAZ Alagoas',
+        portalOficial: 'https://contribuinte.sefaz.al.gov.br/certidao/#/',
+        consultaAutomatica: false,
+      },
+
+      AP: {
+        uf: 'AP',
+        nome: 'SEFAZ Amapá',
+        portalOficial: 'https://virtual.sefaz.ap.gov.br/sefazvirtual/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão é realizada pelos serviços virtuais da SEFAZ do Amapá.',
+      },
+
+      AM: {
+        uf: 'AM',
+        nome: 'SEFAZ Amazonas',
+        portalOficial:
+          'https://www.sefaz.am.gov.br/portfolio-servicos/todos?query=Certid%C3%A3o+de+D%C3%A9bitos+Estaduais',
+        consultaAutomatica: false,
+        observacao:
+          'Selecione no portal a modalidade de Certidão de Débitos Estaduais correspondente ao contribuinte.',
+      },
+
+      BA: {
+        uf: 'BA',
+        nome: 'SEFAZ Bahia',
+        portalOficial: 'https://www.sefaz.ba.gov.br/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada pelos serviços de certidões da SEFAZ Bahia.',
+      },
+
+      CE: {
+        uf: 'CE',
+        nome: 'SEFAZ Ceará',
+        portalOficial:
+          'https://consultapublica.sefaz.ce.gov.br/certidaonegativa/preparar-consultar',
+        consultaAutomatica: false,
+      },
+
+      DF: {
+        uf: 'DF',
+        nome: 'Receita do Distrito Federal',
+        portalOficial: 'https://www.receita.fazenda.df.gov.br/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada pelos serviços de certidão da Receita do Distrito Federal.',
+      },
+
+      ES: {
+        uf: 'ES',
+        nome: 'SEFAZ Espírito Santo',
+        portalOficial: 'https://sefaz.es.gov.br/emissao-de-certidoes',
+        consultaAutomatica: false,
+      },
+
+      GO: {
+        uf: 'GO',
+        nome: 'Secretaria da Economia de Goiás',
+        portalOficial: 'https://goias.gov.br/economia/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada nos serviços de certidões da Secretaria da Economia de Goiás.',
+      },
+
+      MA: {
+        uf: 'MA',
+        nome: 'SEFAZ Maranhão',
+        portalOficial:
+          'https://www.ma.gov.br/servicos/emissao-de-certidoes-negativas-de-debitos-e-certidoes-negativas-de-divida-ativa',
+        consultaAutomatica: false,
+      },
+
+      MT: {
+        uf: 'MT',
+        nome: 'SEFAZ Mato Grosso',
+        portalOficial: 'https://www.sefaz.mt.gov.br/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada pelos serviços eletrônicos da SEFAZ Mato Grosso.',
+      },
+
+      MS: {
+        uf: 'MS',
+        nome: 'SEFAZ Mato Grosso do Sul',
+        portalOficial:
+          'https://www.sefaz.ms.gov.br/servicos-em-destaque/certidao-tributaria-estadual-emissao-certidao-negativa-de-debitos-estaduais-2/',
+        consultaAutomatica: false,
+      },
+
+      MG: {
+        uf: 'MG',
+        nome: 'SEF Minas Gerais',
+        portalOficial:
+          'https://www.mg.gov.br/servico/emitir-certidao-de-debitos-tributarios-cdt',
+        consultaAutomatica: false,
+        observacao:
+          'Emissão da Certidão de Débitos Tributários - CDT de Minas Gerais.',
+      },
+
+      PA: {
+        uf: 'PA',
+        nome: 'SEFA Pará',
+        portalOficial:
+          'https://app.sefa.pa.gov.br/emissao-certidao/emitirCertidao.action',
+        consultaAutomatica: false,
+      },
+
+      PB: {
+        uf: 'PB',
+        nome: 'SEFAZ Paraíba',
+        portalOficial:
+          'https://www.sefaz.pb.gov.br/servirtual/certidoes/emissao-de-certidao-de-debitos-cidadao',
+        consultaAutomatica: false,
+      },
+
+      PR: {
+        uf: 'PR',
+        nome: 'Receita Estadual do Paraná',
+        portalOficial:
+          'https://www.fazenda.pr.gov.br/servicos/Empresa/Certidoes/Emitir-Certidao-Negativa-Receita-Estadual-kZrX5gol',
+        consultaAutomatica: false,
+      },
+
+      PE: {
+        uf: 'PE',
+        nome: 'SEFAZ Pernambuco',
+        portalOficial:
+          'https://www.sefaz.pe.gov.br/Servicos/Paginas/Telesefaz-resumo.aspx',
+        consultaAutomatica: false,
+        observacao:
+          'Utilize os serviços de certidão disponíveis na SEFAZ Pernambuco.',
+      },
+
+      PI: {
+        uf: 'PI',
+        nome: 'SEFAZ Piauí',
+        portalOficial: 'https://www.sefaz.pi.gov.br/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada pelos serviços eletrônicos da SEFAZ Piauí.',
+      },
+
+      RJ: {
+        uf: 'RJ',
+        nome: 'SEFAZ Rio de Janeiro',
+        portalOficial:
+          'https://portal.fazenda.rj.gov.br/certidoes-de-regularidade-fiscal/',
+        consultaAutomatica: false,
+        observacao:
+          'O Rio de Janeiro possui fluxos diferentes de certidão conforme a situação do contribuinte.',
+      },
+
+      RN: {
+        uf: 'RN',
+        nome: 'SET Rio Grande do Norte',
+        portalOficial: 'https://www.set.rn.gov.br/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada pelos serviços eletrônicos da Secretaria de Tributação do RN.',
+      },
+
+      RS: {
+        uf: 'RS',
+        nome: 'Receita Estadual do Rio Grande do Sul',
+        portalOficial: 'https://receita.fazenda.rs.gov.br/inicial',
+        consultaAutomatica: false,
+        observacao:
+          'Utilize o serviço de Certidão de Situação Fiscal da Receita Estadual do Rio Grande do Sul.',
+      },
+
+      RO: {
+        uf: 'RO',
+        nome: 'SEFIN Rondônia',
+        portalOficial:
+          'https://portalcontribuinte.sefin.ro.gov.br/Publico/certidaoNegativa.jsp',
+        consultaAutomatica: false,
+        requerCaptcha: true,
+        observacao:
+          'O formulário de emissão da Certidão Negativa utiliza CAPTCHA.',
+      },
+
+      RR: {
+        uf: 'RR',
+        nome: 'SEFAZ Roraima',
+        portalOficial: 'https://sefaz.rr.gov.br/central/central-de-atendimento',
+        consultaAutomatica: false,
+        observacao:
+          'Consulte os serviços de certidão disponibilizados pela SEFAZ Roraima.',
+      },
+
+      SC: {
+        uf: 'SC',
+        nome: 'SEF Santa Catarina',
+        portalOficial:
+          'https://www.sef.sc.gov.br/servicos/emitir-certidao-negativa-de-debitos-fiscais-cnd',
+        consultaAutomatica: false,
+      },
+
+      SP: {
+        uf: 'SP',
+        nome: 'SEFAZ São Paulo',
+        portalOficial:
+          'https://www10.fazenda.sp.gov.br/CertidaoNegativaDeb/Pages/EmissaoCertidaoNegativa.aspx',
+        consultaAutomatica: false,
+      },
+
+      SE: {
+        uf: 'SE',
+        nome: 'SEFAZ Sergipe',
+        portalOficial: 'https://www.sefaz.se.gov.br/',
+        consultaAutomatica: false,
+        observacao:
+          'A emissão deve ser realizada pelos serviços eletrônicos da SEFAZ Sergipe.',
+      },
+
+      TO: {
+        uf: 'TO',
+        nome: 'SEFAZ Tocantins',
+        portalOficial: 'https://portal.sefaz.to.gov.br/debitos-fiscais',
+        consultaAutomatica: false,
+      },
+    };
+
+    return portais[ufNormalizada] ?? null;
+  }
+
+  private async consultarCertidaoEstadual(
+    cnpj: string,
+    uf: string | null | undefined,
+  ): Promise<ResultadoFonte<Record<string, any>>> {
+    const cnpjLimpo = this.limparCnpj(cnpj);
+
+    const ufNormalizada = String(uf ?? '')
+      .trim()
+      .toUpperCase();
+
+    if (!ufNormalizada) {
+      return this.resultadoFonte<Record<string, any>>(
+        'SEFAZ Estadual',
+        'ERRO',
+        null,
+        'Não foi possível identificar a UF da empresa.',
+      );
+    }
+
+    if (!/^[A-Z]{2}$/.test(ufNormalizada)) {
+      return this.resultadoFonte<Record<string, any>>(
+        'SEFAZ Estadual',
+        'ERRO',
+        null,
+        `A UF "${ufNormalizada}" é inválida.`,
+      );
+    }
+
+    return this.consultarCertidaoEstadualManual(cnpjLimpo, ufNormalizada);
+  }
+
+  private consultarCertidaoEstadualManual(
+    cnpj: string,
+    uf: string,
+  ): ResultadoFonte<Record<string, any>> {
+    const portal = this.obterPortalCertidaoEstadual(uf);
+
+    if (!portal) {
+      return this.resultadoFonte<Record<string, any>>(
+        `SEFAZ ${uf}`,
+        'NAO_CONFIGURADA',
+        {
+          cnpj,
+          uf,
+
+          provedor: 'MANUAL',
+
+          consultaAutomatica: false,
+
+          documentoDisponivel: false,
+
+          requerInteracaoUsuario: true,
+
+          requerCaptcha: false,
+
+          situacao: 'CONSULTA_MANUAL',
+        },
+        `O portal de Certidão Estadual para ${uf} ainda não foi configurado.`,
+      );
+    }
+
+    return this.resultadoFonte<Record<string, any>>(portal.nome, 'SUCESSO', {
+      cnpj,
+
+      uf: portal.uf,
+
+      orgao: portal.nome,
+
+      provedor: 'MANUAL',
+
+      consultaAutomatica: portal.consultaAutomatica,
+
+      documentoDisponivel: false,
+
+      requerInteracaoUsuario: true,
+
+      requerCaptcha: portal.requerCaptcha ?? false,
+
+      situacao: 'CONSULTA_MANUAL',
+
+      observacao:
+        portal.observacao ??
+        `A Certidão Estadual deve ser emitida manualmente no portal oficial de ${portal.nome}.`,
+
+      portalOficial: portal.portalOficial,
+    });
+  }
+
   async consultar(cnpj: string): Promise<ConsultaCnpjAgregada> {
     const cnpjLimpo = this.limparCnpj(cnpj);
 
@@ -936,10 +1319,15 @@ export class CnpjConsultaService {
 
     const simples = this.consultarSimples(receita);
 
-    const [reclameAqui, datajud] = await Promise.all([
-      this.consultarReclameAqui(cnpjLimpo),
-      this.consultarDatajud(cnpjLimpo),
-    ]);
+    const uf = receita.dados?.uf;
+
+    const [reclameAqui, datajud, certidaoFederal, certidaoEstadual] =
+      await Promise.all([
+        this.consultarReclameAqui(cnpjLimpo),
+        this.consultarDatajud(cnpjLimpo),
+        this.consultarCertidaoFederal(cnpjLimpo),
+        this.consultarCertidaoEstadual(cnpjLimpo, uf),
+      ]);
 
     return {
       cnpj: cnpjLimpo,
@@ -951,6 +1339,8 @@ export class CnpjConsultaService {
         simples,
         reclameAqui,
         datajud,
+        certidaoFederal,
+        certidaoEstadual,
       },
 
       consultadoEm: new Date().toISOString(),
@@ -1884,5 +2274,34 @@ export class CnpjConsultaService {
         error?.message || 'Não foi possível excluir a consulta do CNPJ.',
       );
     }
+  }
+
+  async visualizarCertidao(id: string, res: Response) {
+    const certidao = await this.prisma.cnpjCertidao.findUnique({
+      where: { id },
+    });
+
+    if (!certidao) {
+      throw new NotFoundException('Certidão não encontrada.');
+    }
+
+    if (!certidao.caminho) {
+      throw new NotFoundException('Arquivo da certidão não encontrado.');
+    }
+
+    if (!fs.existsSync(certidao.caminho)) {
+      throw new NotFoundException('Arquivo físico da certidão não encontrado.');
+    }
+
+    res.setHeader('Content-Type', certidao.mimeType || 'application/pdf');
+
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(
+        certidao.nomeOriginal || 'certidao.pdf',
+      )}"`,
+    );
+
+    return res.sendFile(path.resolve(certidao.caminho));
   }
 }

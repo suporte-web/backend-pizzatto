@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -19,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { diskStorage } from 'multer';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 
 @ApiTags('CNPJ Consulta')
 @Controller('cnpj-consultas')
@@ -43,7 +45,7 @@ export class CnpjConsultaController {
     FilesInterceptor('arquivos', 10, {
       storage: diskStorage({
         destination: (_request, _file, callback) => {
-          const destino = './uploads/cnpj-certidoes';
+          const destino = './downloads/cnpj-certidoes';
 
           mkdirSync(destino, {
             recursive: true,
@@ -126,5 +128,13 @@ export class CnpjConsultaController {
   })
   async delete(@Param('id') id: string) {
     return this.cnpjConsultaService.delete(id);
+  }
+
+  @Get('certidoes/:id/arquivo')
+  async visualizarCertidao(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    return this.cnpjConsultaService.visualizarCertidao(id, res);
   }
 }
