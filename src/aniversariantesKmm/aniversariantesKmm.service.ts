@@ -11,12 +11,12 @@ export class AniversariantesKmmService {
 
   async findAllAniversariantes(body: any) {
     const mesNumero = Number(body.mes);
+    const nome = body.nome?.trim() || null;
 
     const sql = `
     SELECT
       P."COD_PESSOA",
-      P."CNPJ_CPF",
-      P."RAZAO_SOCIAL",
+      PF."NOME",
       PF."DATA_NASCIMENTO",
       M."DESCRICAO" AS "MODALIDADE",
       PMS."DESCRICAO" AS "SITUACAO"
@@ -37,13 +37,15 @@ export class AniversariantesKmmService {
 
     WHERE M."NUM_MODALIDADE" = 4
       AND EXTRACT(MONTH FROM PF."DATA_NASCIMENTO") = $1
+      AND (
+        $2::TEXT IS NULL
+        OR PF."NOME" ILIKE '%' || $2 || '%'
+      )
 
-    ORDER BY
-      EXTRACT(DAY FROM PF."DATA_NASCIMENTO"),
-      P."RAZAO_SOCIAL";
+    ORDER BY PF."NOME" ASC;
   `;
 
-    const result = await this.kmmDatabaseService.query(sql, [mesNumero]);
+    const result = await this.kmmDatabaseService.query(sql, [mesNumero, nome]);
 
     return result.rows;
   }
