@@ -19,7 +19,7 @@ import { ClientIp } from '../decorator/client-ip.decorator';
 import { User } from '../decorator/user.decorator';
 import { extname } from 'path';
 
-@ApiTags('AssinaturaPadrao')
+@ApiTags('Assinatura Padrão')
 @Controller('assinatura-padrao')
 @UseGuards(AuthGuard)
 export class AssinaturaPadraoController {

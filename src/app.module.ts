@@ -27,6 +27,8 @@ import { BeneficiosModule } from './beneficios/beneficios.module';
 import { CnpjConsultaModule } from './cnpjConsulta/cnpjConsulta.module';
 import { KmmDatabaseModule } from './database/kmm/kmm-database.module';
 import { AniversariantesKmmModule } from './aniversariantesKmm/aniversariantesKmm.module';
+import { FotoPerfilWhatsappModule } from './fotoPerfilWhatsapp/fotoPerfilWhatsapp.module';
+import { FotoPerfilWhatsappPadraoModule } from './fotoPerfilWhatsappPadrao/fotoPerfilWhatsappPadrao.module';
 
 @Module({
   imports: [
@@ -55,6 +57,8 @@ import { AniversariantesKmmModule } from './aniversariantesKmm/aniversariantesKm
     CnpjConsultaModule,
     KmmDatabaseModule,
     AniversariantesKmmModule,
+    FotoPerfilWhatsappModule,
+    FotoPerfilWhatsappPadraoModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

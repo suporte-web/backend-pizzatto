@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 @Injectable()
-export class AssinaturasEmailService {
+export class FotoPerfilWhatsappService {
   private transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: process.env.SMTP_PORT,
@@ -31,30 +31,30 @@ export class AssinaturasEmailService {
 
   async create(body: any, file: Express.Multer.File, ip: string, user: any) {
     if (!file) {
-      throw new BadRequestException('Imagem da assinatura é obrigatória.');
+      throw new BadRequestException('Imagem da Foto de Perfil é obrigatória.');
     }
 
-    const caminhoImagem = `downloads/assinaturas/${file.filename}`;
+    const caminhoImagem = `downloads/foto-perfil-whatsapp/${file.filename}`;
 
-    const create = await this.prisma.assinatura.create({
+    const create = await this.prisma.fotoPerfilWhatsapp.create({
       data: {
         nome: body.nome.trim(),
         email: body.email.trim(),
-        departamento: body.departamento.trim(),
-        telefone: body.telefone.trim(),
         criadoPor: user.name,
         caminhoImagem,
       },
     });
 
-    return await this.prisma.audit_logs.create({
+    await this.prisma.audit_logs.create({
       data: {
-        acao: `Criou a Assinatura de E-mail de ${create.nome}`,
+        acao: `Criou a Foto de Perfil do WhatsApp de ${create.nome}`,
         entidade: user.name,
         filialEntidade: user.company,
         ipAddress: ip,
       },
     });
+
+    return create;
   }
 
   async findByFilter(body: any) {
@@ -85,18 +85,6 @@ export class AssinaturasEmailService {
                       mode: 'insensitive' as const,
                     },
                   },
-                  {
-                    departamento: {
-                      contains: pesquisa,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                  {
-                    telefone: {
-                      contains: pesquisa,
-                      mode: 'insensitive' as const,
-                    },
-                  },
                 ],
               },
             ]
@@ -105,13 +93,13 @@ export class AssinaturasEmailService {
     };
 
     const [result, total] = await Promise.all([
-      this.prisma.assinatura.findMany({
+      this.prisma.fotoPerfilWhatsapp.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.assinatura.count({ where }),
+      this.prisma.fotoPerfilWhatsapp.count({ where }),
     ]);
 
     return {
@@ -121,23 +109,23 @@ export class AssinaturasEmailService {
   }
 
   async updateValidacao(id: string, body: any) {
-    const assinatura = await this.prisma.assinatura.findUnique({
+    const fotoPerfilWhatsapp = await this.prisma.fotoPerfilWhatsapp.findUnique({
       where: { id },
     });
 
-    if (!assinatura) {
-      throw new NotFoundException('Assinatura não encontrada.');
+    if (!fotoPerfilWhatsapp) {
+      throw new NotFoundException('Foto de Perfil não encontrada.');
     }
 
     if (!['APROVADO', 'REPROVADO'].includes(body.status)) {
       throw new BadRequestException('Status inválido.');
     }
 
-    const destinatario = assinatura.email;
+    const destinatario = fotoPerfilWhatsapp.email;
 
     if (!destinatario) {
       throw new BadRequestException(
-        'A assinatura não possui um e-mail válido.',
+        'A foto de Perfil não possui um e-mail válido.',
       );
     }
 
@@ -146,7 +134,7 @@ export class AssinaturasEmailService {
     const attachments: nodemailer.SendMailOptions['attachments'] = [];
 
     if (body.status === 'REPROVADO') {
-      subject = 'Sua assinatura foi reprovada ❌';
+      subject = 'Sua Foto de Perfil foi reprovada ❌';
 
       html = `
       <div style="margin:0; padding:0; background-color:#f4f6f8; font-family:Arial, Helvetica, sans-serif;">
@@ -159,7 +147,7 @@ export class AssinaturasEmailService {
                 <tr>
                   <td style="background:#d32f2f; padding:24px 32px; color:#ffffff;">
                     <h1 style="margin:0; font-size:24px;">
-                      Assinatura reprovada
+                      Foto de Perfil reprovada
                     </h1>
                   </td>
                 </tr>
@@ -167,11 +155,11 @@ export class AssinaturasEmailService {
                 <tr>
                   <td style="padding:32px;">
                     <p style="font-size:16px; color:#333333;">
-                      Olá, <strong>${assinatura.nome}</strong>.
+                      Olá, <strong>${fotoPerfilWhatsapp.nome}</strong>.
                     </p>
 
                     <p style="font-size:15px; line-height:1.7; color:#555555;">
-                      Sua solicitação de assinatura foi reprovada.
+                      Sua solicitação de foto de perfil foi reprovada.
                     </p>
 
                     <div style="margin:24px 0; padding:18px 20px; background:#fff4f4; border:1px solid #f3c7c7; border-radius:10px;">
@@ -199,36 +187,32 @@ export class AssinaturasEmailService {
     }
 
     if (body.status === 'APROVADO') {
-      subject = 'Sua assinatura foi aprovada ✅';
+      subject = 'Sua Foto de Perfil foi aprovada ✅';
 
-      if (!assinatura.caminhoImagem) {
+      if (!fotoPerfilWhatsapp.caminhoImagem) {
         throw new BadRequestException(
-          'A assinatura não possui uma imagem vinculada.',
+          'A Foto de Perfil não possui uma imagem vinculada.',
         );
       }
 
-      /*
-       * No create, o caminho salvo é:
-       * downloads/assinaturas/nome-do-arquivo.png
-       *
-       * process.cwd() precisa apontar para a raiz da aplicação,
-       * onde está a pasta downloads.
-       */
       const caminhoAbsoluto = path.resolve(
         process.cwd(),
-        assinatura.caminhoImagem,
+        fotoPerfilWhatsapp.caminhoImagem,
       );
 
       if (!fs.existsSync(caminhoAbsoluto)) {
-        console.error('[ASSINATURA] Arquivo não encontrado:', caminhoAbsoluto);
+        console.error(
+          '[FOTO DE PERFIL] Arquivo não encontrado:',
+          caminhoAbsoluto,
+        );
 
         throw new NotFoundException(
-          'O arquivo da assinatura não foi encontrado no servidor.',
+          'O arquivo da foto de perfil não foi encontrado no servidor.',
         );
       }
 
       attachments.push({
-        filename: `assinatura-${assinatura.nome
+        filename: `foto-de-perfil-${fotoPerfilWhatsapp.nome
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .replace(/[^a-zA-Z0-9-_ ]/g, '')
@@ -250,11 +234,11 @@ export class AssinaturasEmailService {
                 <tr>
                   <td style="background:#2e7d32; padding:24px 32px; color:#ffffff;">
                     <h1 style="margin:0; font-size:24px;">
-                      Assinatura aprovada
+                      Foto de Perfil aprovada
                     </h1>
 
                     <p style="margin:8px 0 0; font-size:14px;">
-                      Sua assinatura foi validada com sucesso.
+                      Sua foto de perfil foi validada com sucesso.
                     </p>
                   </td>
                 </tr>
@@ -262,19 +246,19 @@ export class AssinaturasEmailService {
                 <tr>
                   <td style="padding:32px;">
                     <p style="font-size:16px; color:#333333;">
-                      Olá, <strong>${assinatura.nome}</strong>.
+                      Olá, <strong>${fotoPerfilWhatsapp.nome}</strong>.
                     </p>
 
                     <p style="font-size:15px; line-height:1.7; color:#555555;">
-                      Sua solicitação de assinatura de e-mail foi
-                      <strong style="color:#2e7d32;">
-                        aprovada com sucesso
-                      </strong>.
+                      Sua solicitação de foto de perfil para o WhatsApp foi
+                        <strong style="color:#2e7d32;">
+                            aprovada com sucesso
+                        </strong>.
                     </p>
 
                     <div style="margin:24px 0; padding:18px 20px; background:#f1f8f2; border:1px solid #cfe8d1; border-radius:10px;">
                       <p style="margin:0; color:#2f5d34;">
-                        A assinatura aprovada segue anexada a este e-mail.
+                        A foto de perfil aprovada segue anexada a este e-mail.
                       </p>
                     </div>
 
@@ -300,15 +284,16 @@ export class AssinaturasEmailService {
         html,
         attachments,
       });
+
     } catch (error) {
-      console.error('[ASSINATURA] Erro no envio do e-mail:', error);
+      console.error('[FOTO DE PERFIL] Erro no envio do e-mail:', error);
 
       throw new InternalServerErrorException(
-        'Não foi possível enviar o e-mail da assinatura.',
+        'Não foi possível enviar o e-mail da foto de perfil.',
       );
     }
 
-    return this.prisma.assinatura.update({
+    return this.prisma.fotoPerfilWhatsapp.update({
       where: { id },
       data: {
         status: body.status,

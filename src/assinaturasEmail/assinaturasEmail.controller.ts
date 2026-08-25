@@ -17,7 +17,7 @@ import { AssinaturasEmailService } from './assinaturasEmail.service';
 import { User } from '../decorator/user.decorator';
 import { ClientIp } from '../decorator/client-ip.decorator';
 
-@ApiTags('AssinaturasEmail')
+@ApiTags('Assinaturas Email')
 @Controller('assinaturas-email')
 @UseGuards(AuthGuard)
 export class AssinaturasEmailController {

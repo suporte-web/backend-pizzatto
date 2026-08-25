@@ -187,8 +187,6 @@ export class GlpiService {
       // Se sua pasta 'imgs' está no mesmo nível da pasta 'src'
       const logoPath = path.join(__dirname, '..', '..', 'imgs', 'logo.jpg');
 
-      // console.log('Procurando logo em:', logoPath); // Debug
-
       // Verificar se o arquivo existe
       if (!fs.existsSync(logoPath)) {
         // console.warn('Logo não encontrada em:', logoPath);
@@ -201,9 +199,7 @@ export class GlpiService {
         ];
 
         for (const altPath of alternativePaths) {
-          // console.log('Tentando caminho alternativo:', altPath);
           if (fs.existsSync(altPath)) {
-            // console.log('Logo encontrada em:', altPath);
             const imageBuffer = fs.readFileSync(altPath);
             const base64Image = imageBuffer.toString('base64');
             return `data:image/jpeg;base64,${base64Image}`;
@@ -226,7 +222,6 @@ export class GlpiService {
 
   async createPdfTermo(body: any) {
     try {
-      console.log(body);
 
       const computer = await this.getComputerByIdFull(Number(body.id));
 
@@ -646,8 +641,6 @@ export class GlpiService {
 
         const finalBuffer =
           pdfBuffer instanceof Buffer ? pdfBuffer : Buffer.from(pdfBuffer);
-
-        console.log(`PDF gerado com ${finalBuffer.length} bytes`);
 
         return {
           pdfBase64: finalBuffer.toString('base64'),
