@@ -8,42 +8,30 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class FotoPerfilWhatsappPadraoService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(
-    body: any,
-    file: Express.Multer.File,
-    ip: string,
-    user: any,
-  ) {
+  async create(body: any, file: Express.Multer.File, ip: string, user: any) {
     if (!file) {
-      throw new BadRequestException(
-        'Imagem de background é obrigatória.',
-      );
+      throw new BadRequestException('Imagem de background é obrigatória.');
     }
 
-    const caminhoBackground =
-      `downloads/background-foto-perfil-whatsapp/${file.filename}`;
+    const caminhoBackground = `downloads/background-foto-perfil-whatsapp/${file.filename}`;
 
-    const photoX =
-      Number(body.photoX);
+    /*
+     * Foto
+     */
+    const photoX = Number(body.photoX);
+    const photoY = Number(body.photoY);
 
-    const photoY =
-      Number(body.photoY);
+    const photoWidth = Number(body.photoWidth);
+    const photoHeight = Number(body.photoHeight);
 
-    const photoSize =
-      Number(body.photoSize);
-
-    const logoX =
-      Number(body.logoX);
-
-    const logoY =
-      Number(body.logoY);
-
-    const logoHeight =
-      Number(body.logoHeight);
+    /*
+     * Logo
+     */
+    const logoX = Number(body.logoX);
+    const logoY = Number(body.logoY);
+    const logoHeight = Number(body.logoHeight);
 
     /*
      * Campos numéricos obrigatórios
@@ -58,8 +46,12 @@ export class FotoPerfilWhatsappPadraoService {
         value: photoY,
       },
       {
-        name: 'photoSize',
-        value: photoSize,
+        name: 'photoWidth',
+        value: photoWidth,
+      },
+      {
+        name: 'photoHeight',
+        value: photoHeight,
       },
       {
         name: 'logoX',
@@ -75,13 +67,9 @@ export class FotoPerfilWhatsappPadraoService {
       },
     ];
 
-    const invalidField =
-      numericFields.find(
-        (field) =>
-          Number.isNaN(
-            field.value,
-          ),
-      );
+    const invalidField = numericFields.find((field) =>
+      Number.isNaN(field.value),
+    );
 
     if (invalidField) {
       throw new BadRequestException(
@@ -90,62 +78,66 @@ export class FotoPerfilWhatsappPadraoService {
     }
 
     /*
+     * Validações adicionais
+     */
+    if (photoWidth <= 0) {
+      throw new BadRequestException(
+        'A largura da foto deve ser maior que zero.',
+      );
+    }
+
+    if (photoHeight <= 0) {
+      throw new BadRequestException(
+        'A altura da foto deve ser maior que zero.',
+      );
+    }
+
+    /*
      * Desativa o padrão anterior
      * e cria o novo padrão.
      */
-    const [
-      ,
-      fotoPerfilWhatsappPadrao,
-    ] =
-      await this.prisma.$transaction([
-        this.prisma.fotoPerfilWhatsappPadrao.updateMany({
-          where: {
-            isAtual: true,
-          },
+    const [, fotoPerfilWhatsappPadrao] = await this.prisma.$transaction([
+      this.prisma.fotoPerfilWhatsappPadrao.updateMany({
+        where: {
+          isAtual: true,
+        },
+        data: {
+          isAtual: false,
+        },
+      }),
 
-          data: {
-            isAtual: false,
-          },
-        }),
+      this.prisma.fotoPerfilWhatsappPadrao.create({
+        data: {
+          caminhoBackground,
 
-        this.prisma.fotoPerfilWhatsappPadrao.create({
-          data: {
-            caminhoBackground,
+          photoX,
+          photoY,
+          photoWidth,
+          photoHeight,
 
-            photoX,
-            photoY,
-            photoSize,
+          logoX,
+          logoY,
+          logoHeight,
 
-            logoX,
-            logoY,
-            logoHeight,
+          criadoPor: user?.name || 'Sistema',
 
-            criadoPor:
-              user?.name ||
-              'Sistema',
-
-            isAtual: true,
-          },
-        }),
-      ]);
+          isAtual: true,
+        },
+      }),
+    ]);
 
     /*
      * Auditoria
      */
     await this.prisma.audit_logs.create({
       data: {
-        acao:
-          'Criou o padrão de Foto de Perfil do WhatsApp',
+        acao: 'Criou o padrão de Foto de Perfil do WhatsApp',
 
-        entidade:
-          user?.name,
+        entidade: user?.name,
 
-        filialEntidade:
-          user?.company ||
-          user?.filial,
+        filialEntidade: user?.company || user?.filial,
 
-        ipAddress:
-          ip,
+        ipAddress: ip,
       },
     });
 
@@ -160,39 +152,25 @@ export class FotoPerfilWhatsappPadraoService {
     });
   }
 
-  async findByFilter(
-    body: any,
-  ) {
-    const page =
-      Number(body.page) > 0
-        ? Number(body.page)
-        : 1;
+  async findByFilter(body: any) {
+    const page = Number(body.page) > 0 ? Number(body.page) : 1;
 
-    const limit =
-      Number(body.limit) > 0
-        ? Number(body.limit)
-        : 10;
+    const limit = Number(body.limit) > 0 ? Number(body.limit) : 10;
 
-    const skip =
-      (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const [
-      result,
-      total,
-    ] =
-      await Promise.all([
-        this.prisma.fotoPerfilWhatsappPadrao.findMany({
-          skip,
-          take: limit,
+    const [result, total] = await Promise.all([
+      this.prisma.fotoPerfilWhatsappPadrao.findMany({
+        skip,
+        take: limit,
 
-          orderBy: {
-            createdAt:
-              'desc',
-          },
-        }),
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
 
-        this.prisma.fotoPerfilWhatsappPadrao.count(),
-      ]);
+      this.prisma.fotoPerfilWhatsappPadrao.count(),
+    ]);
 
     return {
       result,
@@ -200,19 +178,11 @@ export class FotoPerfilWhatsappPadraoService {
     };
   }
 
-  async update(
-    body: any,
-    file?: Express.Multer.File,
-  ) {
-    const id =
-      String(
-        body.id || '',
-      ).trim();
+  async update(body: any, file?: Express.Multer.File) {
+    const id = String(body.id || '').trim();
 
     if (!id) {
-      throw new BadRequestException(
-        'ID é obrigatório.',
-      );
+      throw new BadRequestException('ID é obrigatório.');
     }
 
     const fotoPerfilWhatsappPadrao =
@@ -222,9 +192,7 @@ export class FotoPerfilWhatsappPadraoService {
         },
       });
 
-    if (
-      !fotoPerfilWhatsappPadrao
-    ) {
+    if (!fotoPerfilWhatsappPadrao) {
       throw new NotFoundException(
         'Padrão de Foto de Perfil do WhatsApp não encontrado.',
       );
@@ -237,8 +205,7 @@ export class FotoPerfilWhatsappPadraoService {
      * substituímos o caminho salvo.
      */
     if (file) {
-      data.caminhoBackground =
-        `downloads/background-foto-perfil-whatsapp/${file.filename}`;
+      data.caminhoBackground = `downloads/background-foto-perfil-whatsapp/${file.filename}`;
     }
 
     /*
@@ -247,38 +214,32 @@ export class FotoPerfilWhatsappPadraoService {
     const numericFields = [
       'photoX',
       'photoY',
-      'photoSize',
+
+      'photoWidth',
+      'photoHeight',
 
       'logoX',
       'logoY',
       'logoHeight',
     ];
 
-    for (
-      const field of
-      numericFields
-    ) {
+    for (const field of numericFields) {
       if (
-        body[field] !==
-        undefined
+        body[field] !== undefined &&
+        body[field] !== null &&
+        body[field] !== ''
       ) {
-        const value =
-          Number(
-            body[field],
-          );
+        const value = Number(body[field]);
 
-        if (
-          Number.isNaN(
-            value,
-          )
-        ) {
-          throw new BadRequestException(
-            `Campo numérico inválido: ${field}`,
-          );
+        if (Number.isNaN(value)) {
+          throw new BadRequestException(`Campo numérico inválido: ${field}`);
         }
 
-        data[field] =
-          value;
+        if ((field === 'photoWidth' || field === 'photoHeight') && value <= 0) {
+          throw new BadRequestException(`${field} deve ser maior que zero.`);
+        }
+
+        data[field] = value;
       }
     }
 
@@ -291,18 +252,11 @@ export class FotoPerfilWhatsappPadraoService {
     });
   }
 
-  async delete(
-    body: any,
-  ) {
-    const id =
-      String(
-        body.id || '',
-      ).trim();
+  async delete(body: any) {
+    const id = String(body.id || '').trim();
 
     if (!id) {
-      throw new BadRequestException(
-        'ID é obrigatório.',
-      );
+      throw new BadRequestException('ID é obrigatório.');
     }
 
     const fotoPerfilWhatsappPadrao =
@@ -312,9 +266,7 @@ export class FotoPerfilWhatsappPadraoService {
         },
       });
 
-    if (
-      !fotoPerfilWhatsappPadrao
-    ) {
+    if (!fotoPerfilWhatsappPadrao) {
       throw new NotFoundException(
         'Padrão de Foto de Perfil do WhatsApp não encontrado.',
       );
@@ -327,9 +279,7 @@ export class FotoPerfilWhatsappPadraoService {
     });
   }
 
-  async changeFotoPerfilWhatsappPadrao(
-    id: string,
-  ) {
+  async changeFotoPerfilWhatsappPadrao(id: string) {
     const fotoPerfilWhatsappPadrao =
       await this.prisma.fotoPerfilWhatsappPadrao.findUnique({
         where: {
@@ -337,42 +287,38 @@ export class FotoPerfilWhatsappPadraoService {
         },
       });
 
-    if (
-      !fotoPerfilWhatsappPadrao
-    ) {
+    if (!fotoPerfilWhatsappPadrao) {
       throw new NotFoundException(
         'Padrão de Foto de Perfil do WhatsApp não encontrado.',
       );
     }
 
-    return this.prisma.$transaction(
-      async (tx) => {
-        /*
-         * Remove o padrão atual.
-         */
-        await tx.fotoPerfilWhatsappPadrao.updateMany({
-          where: {
-            isAtual: true,
-          },
+    return this.prisma.$transaction(async (tx) => {
+      /*
+       * Remove o padrão atual.
+       */
+      await tx.fotoPerfilWhatsappPadrao.updateMany({
+        where: {
+          isAtual: true,
+        },
 
-          data: {
-            isAtual: false,
-          },
-        });
+        data: {
+          isAtual: false,
+        },
+      });
 
-        /*
-         * Define o novo padrão.
-         */
-        return tx.fotoPerfilWhatsappPadrao.update({
-          where: {
-            id,
-          },
+      /*
+       * Define o novo padrão.
+       */
+      return tx.fotoPerfilWhatsappPadrao.update({
+        where: {
+          id,
+        },
 
-          data: {
-            isAtual: true,
-          },
-        });
-      },
-    );
+        data: {
+          isAtual: true,
+        },
+      });
+    });
   }
 }

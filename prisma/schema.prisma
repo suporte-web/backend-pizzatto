@@ -901,7 +901,6 @@ model FotoPerfilWhatsappPadrao {
   caminhoBackground String?
   photoX            Int?
   photoY            Int?
-  photoSize         Int?
   nomeX             Int?
   nomeY             Int?
   nomeCorFont       String?
@@ -913,6 +912,8 @@ model FotoPerfilWhatsappPadrao {
   isAtual           Boolean  @default(true)
   createdAt         DateTime @default(now()) @db.Timestamp(6)
   updatedAt         DateTime @default(now()) @db.Timestamp(6)
+  photoHeight       Int?
+  photoWidth        Int?
 }
 
 enum Area {

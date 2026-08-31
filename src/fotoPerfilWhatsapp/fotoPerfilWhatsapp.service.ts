@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as nodemailer from 'nodemailer';
 import * as path from 'path';
 import * as fs from 'fs';
+import sharp from 'sharp';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class FotoPerfilWhatsappService {
@@ -22,11 +24,9 @@ export class FotoPerfilWhatsappService {
   });
 
   constructor(private readonly prisma: PrismaService) {
-    this.transporter
-      .verify()
-      .catch((error) => {
-        console.error('Erro ao conectar no SMTP:', error);
-      });
+    this.transporter.verify().catch((error) => {
+      console.error('Erro ao conectar no SMTP:', error);
+    });
   }
 
   async create(body: any, file: Express.Multer.File, ip: string, user: any) {
@@ -34,13 +34,28 @@ export class FotoPerfilWhatsappService {
       throw new BadRequestException('Imagem da Foto de Perfil é obrigatória.');
     }
 
-    const caminhoImagem = `downloads/foto-perfil-whatsapp/${file.filename}`;
+    /*
+     * Valida formato recebido.
+     */
+    if (file.mimetype !== 'image/png') {
+      throw new BadRequestException(
+        'A Foto de Perfil deve estar no formato PNG.',
+      );
+    }
+
+    /*
+     * Gera PNG circular definitivo.
+     */
+    const { caminhoImagem } = await this.gerarPngCircular(file);
 
     const create = await this.prisma.fotoPerfilWhatsapp.create({
       data: {
         nome: body.nome.trim(),
+
         email: body.email.trim(),
-        criadoPor: user.name,
+
+        criadoPor: user?.name || 'Sistema',
+
         caminhoImagem,
       },
     });
@@ -48,8 +63,11 @@ export class FotoPerfilWhatsappService {
     await this.prisma.audit_logs.create({
       data: {
         acao: `Criou a Foto de Perfil do WhatsApp de ${create.nome}`,
-        entidade: user.name,
-        filialEntidade: user.company,
+
+        entidade: user?.name,
+
+        filialEntidade: user?.company,
+
         ipAddress: ip,
       },
     });
@@ -218,9 +236,9 @@ export class FotoPerfilWhatsappService {
           .replace(/[^a-zA-Z0-9-_ ]/g, '')
           .trim()
           .replace(/\s+/g, '-')
-          .toLowerCase()}-${Date.now()}.jpeg`,
+          .toLowerCase()}-${Date.now()}.png`,
         path: caminhoAbsoluto,
-        contentType: 'image/jpeg',
+        contentType: 'image/png',
       });
 
       html = `
@@ -284,7 +302,6 @@ export class FotoPerfilWhatsappService {
         html,
         attachments,
       });
-
     } catch (error) {
       console.error('[FOTO DE PERFIL] Erro no envio do e-mail:', error);
 
@@ -303,5 +320,106 @@ export class FotoPerfilWhatsappService {
             : null,
       },
     });
+  }
+
+  private async gerarPngCircular(file: Express.Multer.File): Promise<{
+    caminhoImagem: string;
+    caminhoAbsoluto: string;
+  }> {
+    const pasta = path.resolve(process.cwd(), 'downloads/foto-perfil-whatsapp');
+
+    if (!fs.existsSync(pasta)) {
+      fs.mkdirSync(pasta, {
+        recursive: true,
+      });
+    }
+
+    const nomeArquivo = `${randomUUID()}.png`;
+
+    const caminhoAbsoluto = path.join(pasta, nomeArquivo);
+
+    /*
+     * Descobre as dimensões da imagem recebida.
+     */
+    const metadata = await sharp(file.path).metadata();
+
+    const largura = metadata.width;
+    const altura = metadata.height;
+
+    if (!largura || !altura) {
+      throw new BadRequestException(
+        'Não foi possível identificar as dimensões da imagem.',
+      );
+    }
+
+    /*
+     * Garante uma imagem quadrada.
+     *
+     * Como a Foto de Perfil é circular,
+     * largura e altura precisam ser iguais.
+     */
+    const tamanho = Math.min(largura, altura);
+
+    /*
+     * Máscara circular.
+     */
+    const mascaraCircular = Buffer.from(`
+    <svg
+      width="${tamanho}"
+      height="${tamanho}"
+      viewBox="0 0 ${tamanho} ${tamanho}"
+    >
+      <circle
+        cx="${tamanho / 2}"
+        cy="${tamanho / 2}"
+        r="${tamanho / 2}"
+        fill="white"
+      />
+    </svg>
+  `);
+
+    await sharp(file.path)
+      .resize(tamanho, tamanho, {
+        fit: 'cover',
+        position: 'center',
+      })
+      .ensureAlpha()
+      .composite([
+        {
+          input: mascaraCircular,
+          blend: 'dest-in',
+        },
+      ])
+      .png({
+        compressionLevel: 9,
+      })
+      .toFile(caminhoAbsoluto);
+
+    /*
+     * Remove o arquivo temporário enviado pelo Multer.
+     *
+     * Só fazemos isso se ele for diferente
+     * do PNG final.
+     */
+    if (
+      file.path &&
+      path.resolve(file.path) !== path.resolve(caminhoAbsoluto) &&
+      fs.existsSync(file.path)
+    ) {
+      try {
+        fs.unlinkSync(file.path);
+      } catch (error) {
+        console.error(
+          '[FOTO DE PERFIL] Não foi possível remover arquivo temporário:',
+          error,
+        );
+      }
+    }
+
+    return {
+      caminhoImagem: `downloads/foto-perfil-whatsapp/${nomeArquivo}`,
+
+      caminhoAbsoluto,
+    };
   }
 }

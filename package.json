@@ -59,6 +59,7 @@
     "puppeteer": "^24.26.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.35.4",
     "swagger": "^0.7.5",
     "uuid": "^13.0.0"
   },
