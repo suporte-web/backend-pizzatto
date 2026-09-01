@@ -57,16 +57,53 @@ export class AssinaturasEmailService {
 
   async findByFilter(body: any) {
     const page = Number(body.page) > 0 ? Number(body.page) : 1;
+
     const limit = Number(body.limit) > 0 ? Number(body.limit) : 10;
+
     const skip = (page - 1) * limit;
 
-    const pesquisa = body.pesquisa?.trim();
+    const pesquisa =
+      typeof body.pesquisa === 'string' ? body.pesquisa.trim() : '';
 
-    const where = {
+    let filtroStatus: any = undefined;
+
+    /*
+     * Aceita:
+     *
+     * status: "APROVADO"
+     *
+     * ou:
+     *
+     * status: ["APROVADO", "REPROVADO"]
+     */
+    if (Array.isArray(body.status)) {
+      const statusNormalizados = body.status
+        .map((status: any) =>
+          String(status ?? '')
+            .trim()
+            .toUpperCase(),
+        )
+        .filter(Boolean);
+
+      if (statusNormalizados.length > 0) {
+        filtroStatus = {
+          in: statusNormalizados,
+        };
+      }
+    } else if (typeof body.status === 'string' && body.status.trim()) {
+      filtroStatus = body.status.trim().toUpperCase();
+    }
+
+    const where: any = {
       AND: [
-        {
-          status: 'AGUARDANDO APROVAÇÃO',
-        },
+        ...(filtroStatus
+          ? [
+              {
+                status: filtroStatus,
+              },
+            ]
+          : []),
+
         ...(pesquisa
           ? [
               {
@@ -77,18 +114,21 @@ export class AssinaturasEmailService {
                       mode: 'insensitive' as const,
                     },
                   },
+
                   {
                     email: {
                       contains: pesquisa,
                       mode: 'insensitive' as const,
                     },
                   },
+
                   {
                     departamento: {
                       contains: pesquisa,
                       mode: 'insensitive' as const,
                     },
                   },
+
                   {
                     telefone: {
                       contains: pesquisa,
@@ -107,9 +147,15 @@ export class AssinaturasEmailService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+
+        orderBy: {
+          createdAt: 'desc',
+        },
       }),
-      this.prisma.assinatura.count({ where }),
+
+      this.prisma.assinatura.count({
+        where,
+      }),
     ]);
 
     return {
