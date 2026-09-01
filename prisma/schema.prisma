@@ -896,6 +896,7 @@ model FotoPerfilWhatsapp {
   motivo        String?
   createdAt     DateTime @default(now()) @db.Timestamp(6)
   updatedAt     DateTime @default(now()) @db.Timestamp(6)
+  revisadoPor   String?
 }
 
 model FotoPerfilWhatsappPadrao {

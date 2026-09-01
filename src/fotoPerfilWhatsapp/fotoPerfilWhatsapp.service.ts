@@ -323,6 +323,7 @@ export class FotoPerfilWhatsappService {
       where: { id },
       data: {
         status: body.status,
+        revisadoPor: user.name,
         motivo:
           body.status === 'REPROVADO'
             ? body.motivo?.trim() || 'Não informado'
