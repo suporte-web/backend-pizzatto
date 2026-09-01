@@ -12,6 +12,8 @@ import { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { CnpjNichoValidator } from './validators/cnpj-nicho.validator';
+
 export type FonteStatus =
   | 'SUCESSO'
   | 'INDISPONIVEL'
@@ -143,6 +145,56 @@ export class CnpjConsultaService {
     }
 
     return numero;
+  }
+
+  private validarClassificacaoNicho(
+    classificacao: unknown,
+  ):
+    | 'MESMO_NICHO'
+    | 'NICHO_PARECIDO'
+    | 'NICHO_CORRELATO'
+    | 'NICHO_DIFERENTE'
+    | null {
+    if (
+      classificacao === null ||
+      classificacao === undefined ||
+      classificacao === ''
+    ) {
+      return null;
+    }
+
+    const valor = String(classificacao).trim().toUpperCase();
+
+    const permitidos = [
+      'MESMO_NICHO',
+      'NICHO_PARECIDO',
+      'NICHO_CORRELATO',
+      'NICHO_DIFERENTE',
+    ] as const;
+
+    if (!permitidos.includes(valor as any)) {
+      throw new BadRequestException(
+        'A classificação de nicho informada é inválida.',
+      );
+    }
+
+    return valor as (typeof permitidos)[number];
+  }
+
+  private validarTipoCertidao(
+    tipo: unknown,
+  ): 'FEDERAL' | 'ESTADUAL' | 'MUNICIPAL' {
+    const valor = String(tipo ?? '')
+      .trim()
+      .toUpperCase();
+
+    const permitidos = ['FEDERAL', 'ESTADUAL', 'MUNICIPAL'] as const;
+
+    if (!permitidos.includes(valor as any)) {
+      throw new BadRequestException('O tipo da certidão informado é inválido.');
+    }
+
+    return valor as (typeof permitidos)[number];
   }
 
   private textoNullable(valor: unknown): string | null {
@@ -1303,10 +1355,11 @@ export class CnpjConsultaService {
       throw new BadRequestException('O CNPJ informado é inválido.');
     }
 
-    // 1. Consulta primeiro a Receita
+    /*
+     * Empresa que está sendo consultada.
+     */
     const receita = await this.consultarReceita(cnpjLimpo);
 
-    // 2. Garante que temos os dados cadastrais
     if (receita.status !== 'SUCESSO' || !receita.dados) {
       throw new ServiceUnavailableException({
         message: 'Não foi possível obter os dados cadastrais do CNPJ.',
@@ -1321,6 +1374,71 @@ export class CnpjConsultaService {
 
     const uf = receita.dados?.uf;
 
+    /*
+     * CNPJ da empresa usada como referência
+     * para comparação de nicho.
+     */
+    const cnpjReferencia = String(
+      process.env.CNPJ_EMPRESA_REFERENCIA ?? '',
+    ).replace(/\D/g, '');
+
+    if (!cnpjReferencia) {
+      throw new ServiceUnavailableException(
+        'Configure CNPJ_EMPRESA_REFERENCIA no .env.',
+      );
+    }
+
+    if (!this.validarCnpj(cnpjReferencia)) {
+      throw new ServiceUnavailableException(
+        'O CNPJ configurado em CNPJ_EMPRESA_REFERENCIA é inválido.',
+      );
+    }
+
+    /*
+     * Busca os dados cadastrais da empresa de referência.
+     */
+    const empresaReferencia = await this.consultarReceita(cnpjReferencia);
+
+    if (empresaReferencia.status !== 'SUCESSO' || !empresaReferencia.dados) {
+      throw new ServiceUnavailableException(
+        'Não foi possível consultar os dados da empresa de referência.',
+      );
+    }
+
+    /*
+     * Classificação do nicho.
+     */
+    const classificacaoNicho = CnpjNichoValidator.validar({
+      empresaReferencia: {
+        cnaePrincipal: {
+          codigo: empresaReferencia.dados.cnae_fiscal,
+
+          descricao: empresaReferencia.dados.cnae_fiscal_descricao,
+        },
+
+        cnaesSecundarios: Array.isArray(
+          empresaReferencia.dados.cnaes_secundarios,
+        )
+          ? empresaReferencia.dados.cnaes_secundarios
+          : [],
+      },
+
+      empresaConsultada: {
+        cnaePrincipal: {
+          codigo: receita.dados.cnae_fiscal,
+
+          descricao: receita.dados.cnae_fiscal_descricao,
+        },
+
+        cnaesSecundarios: Array.isArray(receita.dados.cnaes_secundarios)
+          ? receita.dados.cnaes_secundarios
+          : [],
+      },
+    });
+
+    /*
+     * Demais consultas.
+     */
     const [reclameAqui, datajud, certidaoFederal, certidaoEstadual] =
       await Promise.all([
         this.consultarReclameAqui(cnpjLimpo),
@@ -1332,7 +1450,11 @@ export class CnpjConsultaService {
     return {
       cnpj: cnpjLimpo,
 
-      data: receita.dados,
+      data: {
+        ...receita.dados,
+
+        classificacaoNicho,
+      },
 
       consultas: {
         receita,
@@ -1383,9 +1505,16 @@ export class CnpjConsultaService {
         );
       }
 
+      if (arquivos.length > 0 && certidoes.length !== arquivos.length) {
+        throw new BadRequestException(
+          'A quantidade de certidões não corresponde à quantidade de arquivos enviados.',
+        );
+      }
+
       const {
         cnpj,
-        pontuacao = 0,
+        pontuacao,
+        classificacao,
         resultado = 'ANALISE_MANUAL',
         observacao,
         dados,
@@ -1419,6 +1548,9 @@ export class CnpjConsultaService {
 
       const pontuacaoValidada = this.validarPontuacao(pontuacao);
 
+      const classificacaoValidada =
+        this.validarClassificacaoNicho(classificacao);
+
       const respostaOriginal =
         dados.respostaOriginal && typeof dados.respostaOriginal === 'object'
           ? dados.respostaOriginal
@@ -1441,6 +1573,7 @@ export class CnpjConsultaService {
           data: {
             cnpj: cnpjLimpo,
             pontuacao: pontuacaoValidada,
+            classificacao: classificacaoValidada,
             resultado,
             observacao: this.textoNullable(observacao),
           },
@@ -1669,7 +1802,7 @@ export class CnpjConsultaService {
               data: {
                 consultaId: consulta.id,
 
-                tipo: metadados.tipo ?? 'FEDERAL',
+                tipo: this.validarTipoCertidao(metadados.tipo),
 
                 situacao: metadados.situacao ?? 'PENDENTE',
 
