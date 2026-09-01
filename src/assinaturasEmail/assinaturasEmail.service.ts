@@ -319,6 +319,7 @@ export class AssinaturasEmailService {
       where: { id },
       data: {
         status: body.status,
+        revisadoPor: user.name,
         motivo:
           body.status === 'REPROVADO'
             ? body.motivo?.trim() || 'Não informado'

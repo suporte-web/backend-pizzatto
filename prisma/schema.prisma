@@ -20,6 +20,7 @@ model Assinatura {
   status        String?  @default("AGUARDANDO APROVAÇÃO")
   motivo        String?
   departamento  String
+  revisadoPor   String?
 }
 
 model ContasOffice {
