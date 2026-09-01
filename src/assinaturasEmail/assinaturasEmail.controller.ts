@@ -57,7 +57,7 @@ export class AssinaturasEmailController {
   }
 
   @Patch('update-validacao')
-  async updateValidacao(@Body() body: any) {
-    return this.assinaturasEmailService.updateValidacao(body.id, body);
+  async updateValidacao(@Body() body: any, @ClientIp() ip: string, @User() user: any) {
+    return this.assinaturasEmailService.updateValidacao(body.id, body, ip, user);
   }
 }

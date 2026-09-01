@@ -22,11 +22,9 @@ export class AssinaturasEmailService {
   });
 
   constructor(private readonly prisma: PrismaService) {
-    this.transporter
-      .verify()
-      .catch((error) => {
-        console.error('Erro ao conectar no SMTP:', error);
-      });
+    this.transporter.verify().catch((error) => {
+      console.error('Erro ao conectar no SMTP:', error);
+    });
   }
 
   async create(body: any, file: Express.Multer.File, ip: string, user: any) {
@@ -120,7 +118,7 @@ export class AssinaturasEmailService {
     };
   }
 
-  async updateValidacao(id: string, body: any) {
+  async updateValidacao(id: string, body: any, ip: string, user: any) {
     const assinatura = await this.prisma.assinatura.findUnique({
       where: { id },
     });
@@ -307,6 +305,15 @@ export class AssinaturasEmailService {
         'Não foi possível enviar o e-mail da assinatura.',
       );
     }
+
+    await this.prisma.audit_logs.create({
+      data: {
+        acao: `${body.status} assinatura de e-mail de ${assinatura.nome}`,
+        entidade: user.name,
+        filialEntidade: user.company,
+        ipAddress: ip,
+      },
+    });
 
     return this.prisma.assinatura.update({
       where: { id },
