@@ -126,7 +126,7 @@ export class FotoPerfilWhatsappService {
     };
   }
 
-  async updateValidacao(id: string, body: any) {
+  async updateValidacao(id: string, body: any, ip: string, user: any) {
     const fotoPerfilWhatsapp = await this.prisma.fotoPerfilWhatsapp.findUnique({
       where: { id },
     });
@@ -309,6 +309,15 @@ export class FotoPerfilWhatsappService {
         'Não foi possível enviar o e-mail da foto de perfil.',
       );
     }
+
+    await this.prisma.audit_logs.create({
+      data: {
+        acao: `${body.status} foto de perfil do Whatsapp de ${fotoPerfilWhatsapp.nome}`,
+        entidade: user.name,
+        filialEntidade: user.company,
+        ipAddress: ip,
+      },
+    });
 
     return this.prisma.fotoPerfilWhatsapp.update({
       where: { id },

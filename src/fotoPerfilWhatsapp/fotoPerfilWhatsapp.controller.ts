@@ -76,7 +76,12 @@ export class FotoPerfilWhatsappController {
   }
 
   @Patch('update-validacao/:id')
-  async updateValidacao(@Param('id') id: string, @Body() body: any) {
-    return this.fotoPerfilWhatsappService.updateValidacao(id, body);
+  async updateValidacao(
+    @Param('id') id: string,
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return this.fotoPerfilWhatsappService.updateValidacao(id, body, ip, user);
   }
 }
