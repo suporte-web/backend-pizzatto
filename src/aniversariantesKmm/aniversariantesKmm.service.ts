@@ -104,9 +104,6 @@ export class AniversariantesKmmService {
       },
     });
 
-    console.log('ANIVERSARIANTES KMM:', aniversariantes.length);
-    console.log('USUARIOS CHAT:', usuariosChat.length);
-
     const empresasPorNome = new Map<string, string | null>();
 
     usuariosChat.forEach((usuario) => {
@@ -129,11 +126,6 @@ export class AniversariantesKmmService {
       };
     });
 
-    console.log('DIAGNOSTICO ANIVERSARIANTES:', diagnostico);
-
-    /*
-     * Adiciona empresa para TODOS os aniversariantes.
-     */
     return aniversariantes.map((aniversariante: any) => {
       const nomeNormalizado = normalizarNome(aniversariante.NOME);
 
