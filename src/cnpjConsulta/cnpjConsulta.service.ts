@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { CnpjNichoValidator } from './validators/cnpj-nicho.validator';
+import { RegimeTributarioCnpj } from '../../generated/prisma/enums';
 
 export type FonteStatus =
   | 'SUCESSO'
@@ -834,6 +835,42 @@ export class CnpjConsultaService {
     };
   }
 
+  private identificarRegimeTributario(
+    receita: ResultadoFonte<Record<string, any>>,
+  ): RegimeTributarioCnpj {
+    if (receita.status !== 'SUCESSO' || !receita.dados) {
+      return RegimeTributarioCnpj.NAO_IDENTIFICADO;
+    }
+
+    if (receita.dados.opcao_pelo_mei === true) {
+      return RegimeTributarioCnpj.MEI;
+    }
+
+    if (receita.dados.opcao_pelo_simples === true) {
+      return RegimeTributarioCnpj.SIMPLES_NACIONAL;
+    }
+
+    return RegimeTributarioCnpj.NAO_IDENTIFICADO;
+  }
+
+  private validarRegimeTributario(valor: unknown): RegimeTributarioCnpj {
+    if (!valor) {
+      return RegimeTributarioCnpj.NAO_IDENTIFICADO;
+    }
+
+    const regime = String(valor).trim().toUpperCase();
+
+    const permitidos = Object.values(RegimeTributarioCnpj);
+
+    if (!permitidos.includes(regime as RegimeTributarioCnpj)) {
+      throw new BadRequestException(
+        'O regime tributário informado é inválido.',
+      );
+    }
+
+    return regime as RegimeTributarioCnpj;
+  }
+
   private async consultarProcessoDatajud(numero: string, alias: string) {
     const apiKey = process.env.DATAJUD_API_KEY;
 
@@ -1372,6 +1409,8 @@ export class CnpjConsultaService {
 
     const simples = this.consultarSimples(receita);
 
+    const regimeTributario = this.identificarRegimeTributario(receita);
+
     const uf = receita.dados?.uf;
 
     /*
@@ -1454,6 +1493,7 @@ export class CnpjConsultaService {
         ...receita.dados,
 
         classificacaoNicho,
+        regimeTributario,
       },
 
       consultas: {
@@ -1683,6 +1723,12 @@ export class CnpjConsultaService {
 
             opcaoPeloMei: this.booleanNullable(
               dados.opcaoPeloMei ?? respostaOriginal.opcao_pelo_mei,
+            ),
+
+            regimeTributario: this.validarRegimeTributario(
+              dados.regimeTributario ??
+                respostaOriginal.regimeTributario ??
+                RegimeTributarioCnpj.NAO_IDENTIFICADO,
             ),
 
             inscricaoEstadual: this.textoNullable(
@@ -2253,6 +2299,12 @@ export class CnpjConsultaService {
 
           if (dados.opcaoPeloMei !== undefined) {
             atualizacao.opcaoPeloMei = this.booleanNullable(dados.opcaoPeloMei);
+          }
+
+          if (dados.regimeTributario !== undefined) {
+            atualizacao.regimeTributario = this.validarRegimeTributario(
+              dados.regimeTributario,
+            );
           }
 
           if (dados.respostaOriginal !== undefined) {

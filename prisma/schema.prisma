@@ -812,6 +812,7 @@ model CnpjDadosConsultados {
   situacaoEspecial        String?
   telefone1               String?
   telefone2               String?
+  regimeTributario        RegimeTributarioCnpj @default(NAO_IDENTIFICADO)
   CnpjCnaeSecundario      CnpjCnaeSecundario[]
   CnpjConsulta            CnpjConsulta         @relation(fields: [consultaId], references: [id], onDelete: Cascade)
   CnpjSocio               CnpjSocio[]
@@ -977,4 +978,13 @@ enum TipoCertidaoCnpj {
   TRABALHISTA
   FGTS
   OUTRA
+}
+
+enum RegimeTributarioCnpj {
+  MEI
+  SIMPLES_NACIONAL
+  LUCRO_PRESUMIDO
+  LUCRO_REAL
+  LUCRO_ARBITRADO
+  NAO_IDENTIFICADO
 }
