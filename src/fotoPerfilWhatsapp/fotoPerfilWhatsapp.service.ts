@@ -495,19 +495,22 @@ export class FotoPerfilWhatsappService {
   }
 
   async getFotoByUsuario(usuario: string) {
-  const usuarioNormalizado = usuario?.trim();
+    const usuarioNormalizado = usuario?.trim();
 
-  if (!usuarioNormalizado) {
-    return null;
+    if (!usuarioNormalizado) {
+      return null;
+    }
+
+    return await this.prisma.fotoPerfilWhatsapp.findFirst({
+      where: {
+        criadoPor: {
+          equals: usuarioNormalizado,
+          mode: 'insensitive',
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
-
-  return await this.prisma.fotoPerfilWhatsapp.findFirst({
-    where: {
-      criadoPor: usuarioNormalizado,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
-}
 }
