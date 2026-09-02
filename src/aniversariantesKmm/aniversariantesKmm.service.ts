@@ -13,37 +13,58 @@ export class AniversariantesKmmService {
     const mesNumero = Number(body.mes);
     const nome = body.nome?.trim() || null;
 
+    const ordenarPorRecebido = String(
+      body.ordenarPor || 'DATA_NASCIMENTO',
+    ).toUpperCase();
+
+    const ordemRecebida = String(body.ordem || 'asc').toLowerCase();
+
+    const colunasPermitidas: Record<string, string> = {
+      NOME: 'PF."NOME"',
+      DATA_NASCIMENTO: `EXTRACT(DAY FROM PF."DATA_NASCIMENTO")`,
+      MODALIDADE: 'M."DESCRICAO"',
+      SITUACAO: 'PMS."DESCRICAO"',
+    };
+
+    const colunaOrdenacao =
+      colunasPermitidas[ordenarPorRecebido] ||
+      `EXTRACT(DAY FROM PF."DATA_NASCIMENTO")`;
+
+    const ordem = ordemRecebida === 'desc' ? 'DESC' : 'ASC';
+
     const sql = `
-    SELECT
-      P."COD_PESSOA",
-      PF."NOME",
-      TO_CHAR(PF."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
-      M."DESCRICAO" AS "MODALIDADE",
-      PMS."DESCRICAO" AS "SITUACAO"
+      SELECT
+        P."COD_PESSOA",
+        PF."NOME",
+        TO_CHAR(PF."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
+        M."DESCRICAO" AS "MODALIDADE",
+        PMS."DESCRICAO" AS "SITUACAO"
 
-    FROM KSS.PESSOA P
+      FROM KSS.PESSOA P
 
-    INNER JOIN KSS.PESSOA_FISICA PF
-      ON PF."COD_PESSOA" = P."COD_PESSOA"
+      INNER JOIN KSS.PESSOA_FISICA PF
+        ON PF."COD_PESSOA" = P."COD_PESSOA"
 
-    INNER JOIN KSS.PESSOA_MODALIDADE PM
-      ON PM."COD_PESSOA" = P."COD_PESSOA"
+      INNER JOIN KSS.PESSOA_MODALIDADE PM
+        ON PM."COD_PESSOA" = P."COD_PESSOA"
 
-    INNER JOIN KSS.MODALIDADE M
-      ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
+      INNER JOIN KSS.MODALIDADE M
+        ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
 
-    INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
-      ON PMS."SITUACAO" = PM."SITUACAO"
+      INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
+        ON PMS."SITUACAO" = PM."SITUACAO"
 
-    WHERE M."NUM_MODALIDADE" = 4
-      AND EXTRACT(MONTH FROM PF."DATA_NASCIMENTO") = $1
-      AND (
-        $2::TEXT IS NULL
-        OR PF."NOME" ILIKE '%' || $2 || '%'
-      )
+      WHERE M."NUM_MODALIDADE" = 4
 
-    ORDER BY PF."NOME" ASC;
-  `;
+        AND EXTRACT(MONTH FROM PF."DATA_NASCIMENTO") = $1
+
+        AND (
+          $2::TEXT IS NULL
+          OR PF."NOME" ILIKE '%' || $2 || '%'
+        )
+
+      ORDER BY ${colunaOrdenacao} ${ordem};
+    `;
 
     const result = await this.kmmDatabaseService.query(sql, [mesNumero, nome]);
 
