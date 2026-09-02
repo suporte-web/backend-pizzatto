@@ -114,17 +114,17 @@ export class AniversariantesKmmService {
       empresasPorNome.set(nomeNormalizado, usuario.empresa ?? null);
     });
 
-    const diagnostico = aniversariantes.map((aniversariante: any) => {
-      const nomeKmm = aniversariante.NOME;
-      const nomeNormalizado = normalizarNome(nomeKmm);
+    // const diagnostico = aniversariantes.map((aniversariante: any) => {
+    //   const nomeKmm = aniversariante.NOME;
+    //   const nomeNormalizado = normalizarNome(nomeKmm);
 
-      return {
-        nomeKmm,
-        nomeNormalizado,
-        encontradoUsuarioChat: empresasPorNome.has(nomeNormalizado),
-        empresa: empresasPorNome.get(nomeNormalizado) ?? null,
-      };
-    });
+    //   return {
+    //     nomeKmm,
+    //     nomeNormalizado,
+    //     encontradoUsuarioChat: empresasPorNome.has(nomeNormalizado),
+    //     empresa: empresasPorNome.get(nomeNormalizado) ?? null,
+    //   };
+    // });
 
     return aniversariantes.map((aniversariante: any) => {
       const nomeNormalizado = normalizarNome(aniversariante.NOME);
