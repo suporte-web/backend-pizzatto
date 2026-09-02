@@ -33,41 +33,115 @@ export class AniversariantesKmmService {
     const ordem = ordemRecebida === 'desc' ? 'DESC' : 'ASC';
 
     const sql = `
-      SELECT
-        P."COD_PESSOA",
-        PF."NOME",
-        TO_CHAR(PF."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
-        M."DESCRICAO" AS "MODALIDADE",
-        PMS."DESCRICAO" AS "SITUACAO"
+    SELECT
+      P."COD_PESSOA",
+      PF."NOME",
 
-      FROM KSS.PESSOA P
+      TO_CHAR(
+        PF."DATA_NASCIMENTO",
+        'YYYY-MM-DD'
+      ) AS "DATA_NASCIMENTO",
 
-      INNER JOIN KSS.PESSOA_FISICA PF
-        ON PF."COD_PESSOA" = P."COD_PESSOA"
+      M."DESCRICAO" AS "MODALIDADE",
+      PMS."DESCRICAO" AS "SITUACAO"
 
-      INNER JOIN KSS.PESSOA_MODALIDADE PM
-        ON PM."COD_PESSOA" = P."COD_PESSOA"
+    FROM KSS.PESSOA P
 
-      INNER JOIN KSS.MODALIDADE M
-        ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
+    INNER JOIN KSS.PESSOA_FISICA PF
+      ON PF."COD_PESSOA" = P."COD_PESSOA"
 
-      INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
-        ON PMS."SITUACAO" = PM."SITUACAO"
+    INNER JOIN KSS.PESSOA_MODALIDADE PM
+      ON PM."COD_PESSOA" = P."COD_PESSOA"
 
-      WHERE M."NUM_MODALIDADE" = 4
+    INNER JOIN KSS.MODALIDADE M
+      ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
 
-        AND EXTRACT(MONTH FROM PF."DATA_NASCIMENTO") = $1
+    INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
+      ON PMS."SITUACAO" = PM."SITUACAO"
 
-        AND (
-          $2::TEXT IS NULL
-          OR PF."NOME" ILIKE '%' || $2 || '%'
-        )
+    WHERE M."NUM_MODALIDADE" = 4
 
-      ORDER BY ${colunaOrdenacao} ${ordem};
-    `;
+      AND EXTRACT(
+        MONTH FROM PF."DATA_NASCIMENTO"
+      ) = $1
+
+      AND (
+        $2::TEXT IS NULL
+        OR PF."NOME" ILIKE '%' || $2 || '%'
+      )
+
+    ORDER BY ${colunaOrdenacao} ${ordem};
+  `;
 
     const result = await this.kmmDatabaseService.query(sql, [mesNumero, nome]);
 
-    return result.rows;
+    const aniversariantes = result.rows;
+
+    if (!aniversariantes.length) {
+      return [];
+    }
+
+    const normalizarNome = (valor?: string | null) => {
+      if (!valor) return '';
+
+      return valor
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toUpperCase();
+    };
+
+    const usuariosChat = await this.prisma.usuarioChat.findMany({
+      where: {
+        nome: {
+          not: '',
+        },
+      },
+      select: {
+        nome: true,
+        empresa: true,
+      },
+    });
+
+    console.log('ANIVERSARIANTES KMM:', aniversariantes.length);
+    console.log('USUARIOS CHAT:', usuariosChat.length);
+
+    const empresasPorNome = new Map<string, string | null>();
+
+    usuariosChat.forEach((usuario) => {
+      const nomeNormalizado = normalizarNome(usuario.nome);
+
+      if (!nomeNormalizado) return;
+
+      empresasPorNome.set(nomeNormalizado, usuario.empresa ?? null);
+    });
+
+    const diagnostico = aniversariantes.map((aniversariante: any) => {
+      const nomeKmm = aniversariante.NOME;
+      const nomeNormalizado = normalizarNome(nomeKmm);
+
+      return {
+        nomeKmm,
+        nomeNormalizado,
+        encontradoUsuarioChat: empresasPorNome.has(nomeNormalizado),
+        empresa: empresasPorNome.get(nomeNormalizado) ?? null,
+      };
+    });
+
+    console.log('DIAGNOSTICO ANIVERSARIANTES:', diagnostico);
+
+    /*
+     * Adiciona empresa para TODOS os aniversariantes.
+     */
+    return aniversariantes.map((aniversariante: any) => {
+      const nomeNormalizado = normalizarNome(aniversariante.NOME);
+
+      return {
+        ...aniversariante,
+
+        EMPRESA: empresasPorNome.get(nomeNormalizado) ?? null,
+      };
+    });
   }
 }
