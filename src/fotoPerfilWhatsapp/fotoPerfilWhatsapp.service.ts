@@ -481,4 +481,33 @@ export class FotoPerfilWhatsappService {
       caminhoAbsoluto,
     };
   }
+
+  async getFotoByUser(user: any) {
+    return await this.prisma.fotoPerfilWhatsapp.findFirst({
+      where: {
+        criadoPor: user.name,
+        status: 'APROVADO',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async getFotoByUsuario(usuario: string) {
+  const usuarioNormalizado = usuario?.trim();
+
+  if (!usuarioNormalizado) {
+    return null;
+  }
+
+  return await this.prisma.fotoPerfilWhatsapp.findFirst({
+    where: {
+      criadoPor: usuarioNormalizado,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
 }

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
@@ -83,5 +84,15 @@ export class FotoPerfilWhatsappController {
     @User() user: any,
   ) {
     return this.fotoPerfilWhatsappService.updateValidacao(id, body, ip, user);
+  }
+
+  @Get('get-foto-by-user')
+  async getFotoByUser(@User() user: any) {
+    return this.fotoPerfilWhatsappService.getFotoByUser(user);
+  }
+
+  @Get('get-foto-by-usuario/:usuario')
+  async getFotoByUsuario(@Param('usuario') usuario: string) {
+    return this.fotoPerfilWhatsappService.getFotoByUsuario(usuario);
   }
 }
