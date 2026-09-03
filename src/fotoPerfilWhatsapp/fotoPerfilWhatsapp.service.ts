@@ -507,6 +507,7 @@ export class FotoPerfilWhatsappService {
           equals: usuarioNormalizado,
           mode: 'insensitive',
         },
+        status: 'APROVADO',
       },
       orderBy: {
         createdAt: 'desc',
