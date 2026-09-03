@@ -842,12 +842,45 @@ export class CnpjConsultaService {
       return RegimeTributarioCnpj.NAO_IDENTIFICADO;
     }
 
-    if (receita.dados.opcao_pelo_mei === true) {
+    const dados = receita.dados;
+
+    // 1. MEI
+    if (dados.opcao_pelo_mei === true) {
       return RegimeTributarioCnpj.MEI;
     }
 
-    if (receita.dados.opcao_pelo_simples === true) {
+    // 2. Simples Nacional
+    if (dados.opcao_pelo_simples === true) {
       return RegimeTributarioCnpj.SIMPLES_NACIONAL;
+    }
+
+    // 3. Lucro Real / Presumido / Arbitrado
+    if (
+      Array.isArray(dados.regime_tributario) &&
+      dados.regime_tributario.length > 0
+    ) {
+      const regimesValidos = dados.regime_tributario
+        .filter((item: any) => item && item.ano && item.forma_de_tributacao)
+        .sort((a: any, b: any) => Number(b.ano) - Number(a.ano));
+
+      const regimeMaisRecente = regimesValidos[0];
+
+      if (regimeMaisRecente) {
+        const formaTributacao = String(regimeMaisRecente.forma_de_tributacao)
+          .trim()
+          .toUpperCase();
+
+        switch (formaTributacao) {
+          case 'LUCRO REAL':
+            return RegimeTributarioCnpj.LUCRO_REAL;
+
+          case 'LUCRO PRESUMIDO':
+            return RegimeTributarioCnpj.LUCRO_PRESUMIDO;
+
+          case 'LUCRO ARBITRADO':
+            return RegimeTributarioCnpj.LUCRO_ARBITRADO;
+        }
+      }
     }
 
     return RegimeTributarioCnpj.NAO_IDENTIFICADO;
@@ -1485,6 +1518,8 @@ export class CnpjConsultaService {
         this.consultarCertidaoFederal(cnpjLimpo),
         this.consultarCertidaoEstadual(cnpjLimpo, uf),
       ]);
+
+    console.log(receita.dados);
 
     return {
       cnpj: cnpjLimpo,
