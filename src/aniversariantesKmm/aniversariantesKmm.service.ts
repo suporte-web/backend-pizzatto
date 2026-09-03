@@ -20,32 +20,37 @@ export class AniversariantesKmmService {
     const ordemRecebida = String(body.ordem || 'asc').toLowerCase();
 
     const colunasPermitidas: Record<string, string> = {
-      NOME: 'PF."NOME"',
-      DATA_NASCIMENTO: `EXTRACT(DAY FROM PF."DATA_NASCIMENTO")`,
-      MODALIDADE: 'M."DESCRICAO"',
-      SITUACAO: 'PMS."DESCRICAO"',
+      NOME: '"NOME"',
+      DATA_NASCIMENTO: `EXTRACT(DAY FROM "DATA_NASCIMENTO_ORIGINAL")`,
+      MODALIDADE: '"MODALIDADE"',
+      SITUACAO: '"SITUACAO"',
     };
 
     const colunaOrdenacao =
       colunasPermitidas[ordenarPorRecebido] ||
-      `EXTRACT(DAY FROM PF."DATA_NASCIMENTO")`;
+      `EXTRACT(DAY FROM "DATA_NASCIMENTO_ORIGINAL")`;
 
     const ordem = ordemRecebida === 'desc' ? 'DESC' : 'ASC';
 
     const sql = `
+    WITH aniversariantes AS (
       SELECT
         P."COD_PESSOA",
         PF."NOME",
-
+        PF."DATA_NASCIMENTO" AS "DATA_NASCIMENTO_ORIGINAL",
         TO_CHAR(
           PF."DATA_NASCIMENTO",
           'YYYY-MM-DD'
         ) AS "DATA_NASCIMENTO",
-
         M."DESCRICAO" AS "MODALIDADE",
         PMS."DESCRICAO" AS "SITUACAO",
+        UN."UNIDADE_NEGOCIO" AS "FILIAL",
+        P."DATE_INSERT",
 
-        UN."UNIDADE_NEGOCIO" AS "FILIAL"
+        ROW_NUMBER() OVER (
+          PARTITION BY PF."NOME"
+          ORDER BY P."DATE_INSERT" DESC
+        ) AS rn
 
       FROM KSS.PESSOA P
 
@@ -68,6 +73,7 @@ export class AniversariantesKmmService {
         ON UN."COD_PESSOA" = FMH."COD_PESSOA_FILIAL"
 
       WHERE M."NUM_MODALIDADE" = 4
+
         AND PMS."DESCRICAO" = 'Ativo'
 
         AND EXTRACT(
@@ -78,9 +84,22 @@ export class AniversariantesKmmService {
           $2::TEXT IS NULL
           OR PF."NOME" ILIKE '%' || $2 || '%'
         )
+    )
 
-      ORDER BY ${colunaOrdenacao} ${ordem};
-    `;
+    SELECT
+      "COD_PESSOA",
+      "NOME",
+      "DATA_NASCIMENTO",
+      "MODALIDADE",
+      "SITUACAO",
+      "FILIAL"
+
+    FROM aniversariantes
+
+    WHERE rn = 1
+
+    ORDER BY ${colunaOrdenacao} ${ordem};
+  `;
 
     const result = await this.kmmDatabaseService.query(sql, [mesNumero, nome]);
 
