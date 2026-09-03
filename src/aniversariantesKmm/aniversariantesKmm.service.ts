@@ -33,45 +33,54 @@ export class AniversariantesKmmService {
     const ordem = ordemRecebida === 'desc' ? 'DESC' : 'ASC';
 
     const sql = `
-    SELECT
-      P."COD_PESSOA",
-      PF."NOME",
+      SELECT
+        P."COD_PESSOA",
+        PF."NOME",
 
-      TO_CHAR(
-        PF."DATA_NASCIMENTO",
-        'YYYY-MM-DD'
-      ) AS "DATA_NASCIMENTO",
+        TO_CHAR(
+          PF."DATA_NASCIMENTO",
+          'YYYY-MM-DD'
+        ) AS "DATA_NASCIMENTO",
 
-      M."DESCRICAO" AS "MODALIDADE",
-      PMS."DESCRICAO" AS "SITUACAO"
+        M."DESCRICAO" AS "MODALIDADE",
+        PMS."DESCRICAO" AS "SITUACAO",
 
-    FROM KSS.PESSOA P
+        UN."UNIDADE_NEGOCIO" AS "FILIAL"
 
-    INNER JOIN KSS.PESSOA_FISICA PF
-      ON PF."COD_PESSOA" = P."COD_PESSOA"
+      FROM KSS.PESSOA P
 
-    INNER JOIN KSS.PESSOA_MODALIDADE PM
-      ON PM."COD_PESSOA" = P."COD_PESSOA"
+      INNER JOIN KSS.PESSOA_FISICA PF
+        ON PF."COD_PESSOA" = P."COD_PESSOA"
 
-    INNER JOIN KSS.MODALIDADE M
-      ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
+      INNER JOIN KSS.PESSOA_MODALIDADE PM
+        ON PM."COD_PESSOA" = P."COD_PESSOA"
 
-    INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
-      ON PMS."SITUACAO" = PM."SITUACAO"
+      INNER JOIN KSS.MODALIDADE M
+        ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
 
-    WHERE M."NUM_MODALIDADE" = 4
+      INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
+        ON PMS."SITUACAO" = PM."SITUACAO"
 
-      AND EXTRACT(
-        MONTH FROM PF."DATA_NASCIMENTO"
-      ) = $1
+      INNER JOIN KSS.FUNCIONARIO_MATR_HISTORICO FMH
+        ON FMH."COD_PESSOA" = P."COD_PESSOA"
 
-      AND (
-        $2::TEXT IS NULL
-        OR PF."NOME" ILIKE '%' || $2 || '%'
-      )
+      INNER JOIN KSS.UNIDADE_NEGOCIO UN
+        ON UN."COD_PESSOA" = FMH."COD_PESSOA_FILIAL"
 
-    ORDER BY ${colunaOrdenacao} ${ordem};
-  `;
+      WHERE M."NUM_MODALIDADE" = 4
+        AND PMS."DESCRICAO" = 'Ativo'
+
+        AND EXTRACT(
+          MONTH FROM PF."DATA_NASCIMENTO"
+        ) = $1
+
+        AND (
+          $2::TEXT IS NULL
+          OR PF."NOME" ILIKE '%' || $2 || '%'
+        )
+
+      ORDER BY ${colunaOrdenacao} ${ordem};
+    `;
 
     const result = await this.kmmDatabaseService.query(sql, [mesNumero, nome]);
 
@@ -81,59 +90,6 @@ export class AniversariantesKmmService {
       return [];
     }
 
-    const normalizarNome = (valor?: string | null) => {
-      if (!valor) return '';
-
-      return valor
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .replace(/\s+/g, ' ')
-        .toUpperCase();
-    };
-
-    const usuariosChat = await this.prisma.usuarioChat.findMany({
-      where: {
-        nome: {
-          not: '',
-        },
-      },
-      select: {
-        nome: true,
-        empresa: true,
-      },
-    });
-
-    const empresasPorNome = new Map<string, string | null>();
-
-    usuariosChat.forEach((usuario) => {
-      const nomeNormalizado = normalizarNome(usuario.nome);
-
-      if (!nomeNormalizado) return;
-
-      empresasPorNome.set(nomeNormalizado, usuario.empresa ?? null);
-    });
-
-    // const diagnostico = aniversariantes.map((aniversariante: any) => {
-    //   const nomeKmm = aniversariante.NOME;
-    //   const nomeNormalizado = normalizarNome(nomeKmm);
-
-    //   return {
-    //     nomeKmm,
-    //     nomeNormalizado,
-    //     encontradoUsuarioChat: empresasPorNome.has(nomeNormalizado),
-    //     empresa: empresasPorNome.get(nomeNormalizado) ?? null,
-    //   };
-    // });
-
-    return aniversariantes.map((aniversariante: any) => {
-      const nomeNormalizado = normalizarNome(aniversariante.NOME);
-
-      return {
-        ...aniversariante,
-
-        EMPRESA: empresasPorNome.get(nomeNormalizado) ?? null,
-      };
-    });
+    return aniversariantes;
   }
 }
