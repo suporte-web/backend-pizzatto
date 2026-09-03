@@ -53,27 +53,6 @@ export class CasesSucessoController {
 
       limits: {
         files: 10,
-        // fileSize: 250 * 1024 * 1024,
-      },
-
-      fileFilter: (_request, file, callback) => {
-        const tiposPermitidos = [
-          'image/jpeg',
-          'image/png',
-          'image/webp',
-          'application/pdf',
-        ];
-
-        if (!tiposPermitidos.includes(file.mimetype)) {
-          return callback(
-            new BadRequestException(
-              `Tipo de arquivo não permitido: ${file.mimetype}`,
-            ),
-            false,
-          );
-        }
-
-        callback(null, true);
       },
     }),
   )
