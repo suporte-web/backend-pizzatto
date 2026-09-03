@@ -1519,8 +1519,6 @@ export class CnpjConsultaService {
         this.consultarCertidaoEstadual(cnpjLimpo, uf),
       ]);
 
-    console.log(receita.dados);
-
     return {
       cnpj: cnpjLimpo,
 
