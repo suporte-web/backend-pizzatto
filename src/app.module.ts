@@ -29,6 +29,7 @@ import { KmmDatabaseModule } from './database/kmm/kmm-database.module';
 import { AniversariantesKmmModule } from './aniversariantesKmm/aniversariantesKmm.module';
 import { FotoPerfilWhatsappModule } from './fotoPerfilWhatsapp/fotoPerfilWhatsapp.module';
 import { FotoPerfilWhatsappPadraoModule } from './fotoPerfilWhatsappPadrao/fotoPerfilWhatsappPadrao.module';
+import { GestaoLicencasModule } from './gestaoLicencas/gestaoLicencas.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { FotoPerfilWhatsappPadraoModule } from './fotoPerfilWhatsappPadrao/fotoP
     AniversariantesKmmModule,
     FotoPerfilWhatsappModule,
     FotoPerfilWhatsappPadraoModule,
+    GestaoLicencasModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

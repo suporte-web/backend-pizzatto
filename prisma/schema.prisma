@@ -920,6 +920,55 @@ model FotoPerfilWhatsappPadrao {
   photoWidth        Int?
 }
 
+model Licenca {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome               String
+  codigo             String          @unique
+  filialId           String          @db.Uuid
+  responsavelId      String?
+  responsavelNome    String?
+  responsavelEmail   String?
+  descricao          String?
+  dataPublicacao     DateTime        @default(now())
+  dataProximaRevisao DateTime?
+  versaoAtual        String          @default("1.0")
+  status             String          @default("VALIDA")
+  ativo              Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @db.Timestamp(6)
+  LicencaFilial      LicencaFilial   @relation(fields: [filialId], references: [id])
+  LicencaVersao      LicencaVersao[]
+}
+
+model LicencaFilial {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String
+  cnpj      String
+  ativo     Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @db.Timestamp(6)
+  Licenca   Licenca[]
+}
+
+model LicencaVersao {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licencaId        String   @db.Uuid
+  versao           String
+  nomeOriginal     String
+  nomeSalvo        String
+  caminho          String
+  mimeType         String
+  tamanho          Int
+  vigente          Boolean  @default(true)
+  publicadoPorId   String
+  publicadoPorNome String
+  createdAt        DateTime @default(now())
+  Licenca          Licenca  @relation(fields: [licencaId], references: [id], onDelete: Cascade)
+
+  @@index([licencaId])
+  @@index([licencaId, vigente])
+}
+
 enum Area {
   Sistemas
   Infra
