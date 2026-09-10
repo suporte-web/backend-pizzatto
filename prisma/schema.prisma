@@ -936,6 +936,7 @@ model Licenca {
   ativo              Boolean         @default(true)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @default(now()) @db.Timestamp(6)
+  orgao              String?
   LicencaFilial      LicencaFilial   @relation(fields: [filialId], references: [id])
   LicencaVersao      LicencaVersao[]
 }

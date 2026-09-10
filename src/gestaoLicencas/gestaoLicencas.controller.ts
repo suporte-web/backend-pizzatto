@@ -125,6 +125,11 @@ export class GestaoLicencasController {
   async findById(@Param('id') id: string) {
     return this.gestaoLicencasService.findById(id);
   }
+  
+  @Patch('filial/update')
+  async updateFilial(@Body() body: any) {
+    return this.gestaoLicencasService.updateFilial(body);
+  }
 
   @Patch('licenca/update')
   @UseInterceptors(

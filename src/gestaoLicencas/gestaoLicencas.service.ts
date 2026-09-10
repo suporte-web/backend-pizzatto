@@ -36,6 +36,8 @@ export class GestaoLicencasService {
 
     const filialId = String(body.filialId).trim();
 
+    const orgao = String(body.orgao).trim();
+
     const responsavelEmail =
       body.responsavelEmail && String(body.responsavelEmail).trim()
         ? String(body.responsavelEmail).trim().toLowerCase()
@@ -107,6 +109,7 @@ export class GestaoLicencasService {
         data: {
           nome,
           codigo,
+          orgao,
 
           filialId,
           responsavelEmail,
@@ -702,6 +705,8 @@ export class GestaoLicencasService {
 
     const filialId = String(body.filialId).trim();
 
+    const orgao = String(body.orgao).trim();
+
     const licencaComMesmoCodigo = await this.prisma.licenca.findFirst({
       where: {
         codigo,
@@ -834,6 +839,7 @@ export class GestaoLicencasService {
         data: {
           nome: String(body.nome).trim(),
           codigo,
+          orgao,
           filialId,
           status,
 
@@ -1603,6 +1609,45 @@ export class GestaoLicencasService {
           }
         : {}),
     };
+  }
+
+  async updateFilial(body: any) {
+    const { id, nome, cnpj, ativo } = body;
+
+    if (!id) {
+      throw new BadRequestException('O ID da filial é obrigatório.');
+    }
+
+    const filialExistente = await this.prisma.licencaFilial.findUnique({
+      where: {
+        id: String(id),
+      },
+    });
+
+    if (!filialExistente) {
+      throw new NotFoundException('Filial não encontrada.');
+    }
+
+    return await this.prisma.licencaFilial.update({
+      where: {
+        id: String(id),
+      },
+      data: {
+        ...(nome !== undefined && {
+          nome: String(nome).trim(),
+        }),
+
+        ...(cnpj !== undefined && {
+          cnpj: String(cnpj).trim(),
+        }),
+
+        ...(ativo !== undefined && {
+          ativo: ativo === true || ativo === 'true',
+        }),
+
+        updatedAt: new Date(),
+      },
+    });
   }
 
   private async sincronizarStatusLicencas() {
