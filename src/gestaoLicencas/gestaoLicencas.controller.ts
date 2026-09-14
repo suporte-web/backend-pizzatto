@@ -101,8 +101,8 @@ export class GestaoLicencasController {
   @ApiOperation({
     summary: 'Encontra todas as Filiais filtrando',
   })
-  async findByFilterLicencasFiliais(@Body() body: any) {
-    return await this.gestaoLicencasService.findByFilterLicencasFiliais(body);
+  async findByFilterLicencasFiliais(@Body() body: any, @User() user: any) {
+    return await this.gestaoLicencasService.findByFilterLicencasFiliais(body, user);
   }
 
   @Get('filial/find-all-ativos')

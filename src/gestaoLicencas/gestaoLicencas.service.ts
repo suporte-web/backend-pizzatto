@@ -255,15 +255,21 @@ export class GestaoLicencasService {
     });
   }
 
-  async findByFilterLicencasFiliais(body: any) {
+  async findByFilterLicencasFiliais(body: any, user: any) {
     const { pesquisa, ativo, page = 1, limit = 10 } = body;
 
     const skip = (page - 1) * limit;
 
     const where: any = {};
 
+    const roles = user?.roles ?? [];
+
+    const podeVisualizarInativas =
+      roles.includes('DESENVOLVIMENTO') || roles.includes('REGULATORIO');
+
     if (pesquisa?.trim()) {
       const pesquisaNormalizada = pesquisa.trim();
+
       const pesquisaCnpj = pesquisaNormalizada.replace(/\D/g, '');
 
       where.OR = [
@@ -281,8 +287,20 @@ export class GestaoLicencasService {
       ];
     }
 
-    if (ativo !== undefined && ativo !== null && ativo !== '') {
-      where.ativo = ativo;
+    // =========================================================
+    // FILTRO DE ATIVO
+    // =========================================================
+
+    if (podeVisualizarInativas) {
+      // Usuários autorizados podem filtrar
+      // por ativo/inativo normalmente.
+      if (ativo !== undefined && ativo !== null && ativo !== '') {
+        where.ativo = ativo;
+      }
+    } else {
+      // Demais usuários sempre visualizam
+      // somente filiais ativas.
+      where.ativo = true;
     }
 
     const result = await this.prisma.licencaFilial.findMany({
@@ -363,6 +381,10 @@ export class GestaoLicencasService {
       AND: [],
     };
 
+    // =========================================================
+    // ROLES
+    // =========================================================
+
     const rolesUsuario = Array.isArray(user?.roles)
       ? user.roles.map((role: string) => String(role).trim().toUpperCase())
       : [
@@ -371,18 +393,31 @@ export class GestaoLicencasService {
             .toUpperCase(),
         ].filter(Boolean);
 
-    const usuarioRegulatorio = rolesUsuario.includes('REGULATORIO');
+    const podeVisualizarBaixadas =
+      rolesUsuario.includes('DESENVOLVIMENTO') ||
+      rolesUsuario.includes('REGULATORIO');
+
+    // =========================================================
+    // STATUS
+    // =========================================================
 
     const statusNormalizado =
       status && String(status).trim()
         ? String(status).trim().toUpperCase().replace(/\s+/g, '_')
         : null;
 
-    if (statusNormalizado === 'BAIXADA' && !usuarioRegulatorio) {
+    /*
+     * Usuário sem permissão não pode solicitar BAIXADA.
+     */
+    if (statusNormalizado === 'BAIXADA' && !podeVisualizarBaixadas) {
       throw new ForbiddenException(
         'Você não possui permissão para visualizar licenças baixadas.',
       );
     }
+
+    // =========================================================
+    // PESQUISA
+    // =========================================================
 
     if (pesquisa && String(pesquisa).trim()) {
       const termo = String(pesquisa).trim();
@@ -417,23 +452,76 @@ export class GestaoLicencasService {
       });
     }
 
+    // =========================================================
+    // FILIAL
+    // =========================================================
+
     if (filialId) {
       where.filialId = String(filialId);
     }
 
+    // =========================================================
+    // REGRA DE STATUS / BAIXADA
+    // =========================================================
+
     if (statusNormalizado) {
       where.status = statusNormalizado;
+    } else {
+      /*
+       * Sem status específico:
+       *
+       * DESENVOLVIMENTO / REGULATORIO
+       * podem visualizar BAIXADA normalmente.
+       *
+       * Demais usuários nunca visualizam BAIXADA.
+       */
+      if (!podeVisualizarBaixadas) {
+        where.status = {
+          not: 'BAIXADA',
+        };
+      } else if (this.parseBoolean(excluirBaixadas)) {
+        /*
+         * Para usuários autorizados,
+         * ainda permitimos que o frontend peça
+         * explicitamente para esconder baixadas.
+         */
+        where.status = {
+          not: 'BAIXADA',
+        };
+      }
     }
 
-    if (this.parseBoolean(excluirBaixadas) && !statusNormalizado) {
-      where.status = {
-        not: 'BAIXADA',
-      };
+    // =========================================================
+    // ATIVO
+    // =========================================================
+
+    if (podeVisualizarBaixadas) {
+      /*
+       * Quando estiver buscando BAIXADA,
+       * NÃO filtramos por ativo.
+       *
+       * Isso é importante porque uma licença baixada
+       * pode estar ativo = false.
+       */
+      if (
+        statusNormalizado !== 'BAIXADA' &&
+        ativo !== undefined &&
+        ativo !== null &&
+        ativo !== ''
+      ) {
+        where.ativo = this.parseBoolean(ativo);
+      }
+    } else {
+      /*
+       * Usuários comuns:
+       * somente licenças ativas.
+       */
+      where.ativo = true;
     }
 
-    if (ativo !== undefined && ativo !== null && ativo !== '') {
-      where.ativo = this.parseBoolean(ativo);
-    }
+    // =========================================================
+    // DATA DE PUBLICAÇÃO
+    // =========================================================
 
     if (dataPublicacaoInicio || dataPublicacaoFim) {
       where.dataPublicacao = {};
@@ -467,6 +555,10 @@ export class GestaoLicencasService {
       }
     }
 
+    // =========================================================
+    // DATA DE REVISÃO
+    // =========================================================
+
     if (dataRevisaoInicio || dataRevisaoFim) {
       where.dataProximaRevisao = {};
 
@@ -499,9 +591,17 @@ export class GestaoLicencasService {
       }
     }
 
+    // =========================================================
+    // REMOVE AND VAZIO
+    // =========================================================
+
     if (where.AND.length === 0) {
       delete where.AND;
     }
+
+    // =========================================================
+    // CONSULTA
+    // =========================================================
 
     const [result, total] = await this.prisma.$transaction([
       this.prisma.licenca.findMany({
@@ -552,22 +652,47 @@ export class GestaoLicencasService {
   }
 
   async findByFilterFiliaisComLicencas(body: any, user: any) {
-    const { pesquisa, ativo = true, page = 1, limit = 10 } = body;
+    const { pesquisa, ativo, page = 1, limit = 10 } = body;
 
     const pageNumber = Math.max(Number(page) || 1, 1);
+
     const limitNumber = Math.max(Number(limit) || 10, 1);
 
-    const whereLicenca: any = {
-      AND: [],
-    };
+    const roles = user?.roles ?? [];
 
-    if (ativo !== undefined && ativo !== null && ativo !== '') {
-      whereLicenca.ativo = this.parseBoolean(ativo);
+    const podeVisualizarInativas =
+      roles.includes('DESENVOLVIMENTO') || roles.includes('REGULATORIO');
+
+    // =========================================================
+    // FILTRO DAS LICENÇAS
+    // =========================================================
+
+    const whereLicenca: any = {};
+
+    if (podeVisualizarInativas) {
+      /*
+       * DESENVOLVIMENTO / REGULATORIO:
+       *
+       * Sem filtro ativo:
+       * traz licenças ativas + inativas.
+       *
+       * Se informar ativo:
+       * respeita o filtro.
+       */
+      if (ativo !== undefined && ativo !== null && ativo !== '') {
+        whereLicenca.ativo = this.parseBoolean(ativo);
+      }
+    } else {
+      /*
+       * Demais usuários:
+       * somente licenças ativas.
+       */
+      whereLicenca.ativo = true;
     }
 
-    if (whereLicenca.AND.length === 0) {
-      delete whereLicenca.AND;
-    }
+    // =========================================================
+    // BUSCA AS LICENÇAS E IDENTIFICA AS FILIAIS
+    // =========================================================
 
     const licencas = await this.prisma.licenca.findMany({
       where: whereLicenca,
@@ -588,15 +713,16 @@ export class GestaoLicencasService {
       };
     }
 
+    // =========================================================
+    // FILTRO DAS FILIAIS
+    // =========================================================
+
     const whereFilial: any = {
       id: {
         in: filialIds,
       },
     };
 
-    /*
-     * Pesquisa pelo NOME ou CNPJ da filial.
-     */
     if (pesquisa && String(pesquisa).trim()) {
       const termo = String(pesquisa).trim();
 
@@ -622,13 +748,42 @@ export class GestaoLicencasService {
       whereFilial.OR = filtrosPesquisa;
     }
 
-    whereFilial.ativo = true;
+    // =========================================================
+    // PERMISSÃO DAS FILIAIS
+    // =========================================================
+
+    if (podeVisualizarInativas) {
+      /*
+       * DESENVOLVIMENTO / REGULATORIO:
+       * pode visualizar filial ativa ou inativa.
+       *
+       * Se ativo não foi informado,
+       * não adicionamos filtro.
+       */
+      if (ativo !== undefined && ativo !== null && ativo !== '') {
+        whereFilial.ativo = this.parseBoolean(ativo);
+      }
+    } else {
+      /*
+       * Outros usuários:
+       * somente filial ativa.
+       */
+      whereFilial.ativo = true;
+    }
+
+    // =========================================================
+    // TOTAL
+    // =========================================================
 
     const total = await this.prisma.licencaFilial.count({
       where: whereFilial,
     });
 
     const skip = (pageNumber - 1) * limitNumber;
+
+    // =========================================================
+    // RESULTADO
+    // =========================================================
 
     const result = await this.prisma.licencaFilial.findMany({
       where: whereFilial,
@@ -749,11 +904,14 @@ export class GestaoLicencasService {
       .replace(/\s+/g, '_');
 
     const solicitouBaixa = statusRecebido === 'BAIXADA';
+    const solicitouProtocolada = statusRecebido === 'PROTOCOLADA';
 
-    let status: 'VALIDA' | 'VENCIDA' | 'A VENCER' | 'BAIXADA';
+    let status: 'VALIDA' | 'VENCIDA' | 'A VENCER' | 'BAIXADA' | 'PROTOCOLADA';
 
     if (solicitouBaixa) {
       status = 'BAIXADA';
+    } else if (solicitouProtocolada) {
+      status = 'PROTOCOLADA';
     } else {
       status = this.calcularStatusLicenca(dataProximaRevisao);
     }
@@ -918,13 +1076,17 @@ export class GestaoLicencasService {
   private calcularStatusLicenca(
     dataProximaRevisao: Date | null | undefined,
     statusAtual?: string | null,
-  ): 'VALIDA' | 'VENCIDA' | 'A VENCER' | 'BAIXADA' {
-    if (
-      String(statusAtual || '')
-        .trim()
-        .toUpperCase() === 'BAIXADA'
-    ) {
+  ): 'VALIDA' | 'VENCIDA' | 'A VENCER' | 'BAIXADA' | 'PROTOCOLADA' {
+    const statusNormalizado = String(statusAtual || '')
+      .trim()
+      .toUpperCase();
+
+    if (statusNormalizado === 'BAIXADA') {
       return 'BAIXADA';
+    }
+
+    if (statusNormalizado === 'PROTOCOLADA') {
+      return 'PROTOCOLADA';
     }
 
     if (!dataProximaRevisao) {
@@ -986,7 +1148,7 @@ export class GestaoLicencasService {
      * 0-30 dias  = A_VENCER
      * vencida    = VENCIDA
      *
-     * BAIXADA nunca é alterada automaticamente.
+     * BAIXADA e PROTOCOLADA nunca são alteradas automaticamente.
      */
 
     await this.sincronizarStatusLicencas();
@@ -1077,11 +1239,15 @@ export class GestaoLicencasService {
     ).length;
 
     const totalAVencer = licencas.filter(
-      (licenca) => licenca.status === 'A_VENCER',
+      (licenca) => licenca.status === 'A VENCER',
     ).length;
 
     const totalVencidas = licencas.filter(
       (licenca) => licenca.status === 'VENCIDA',
+    ).length;
+
+    const totalProtocoladas = licencas.filter(
+      (licenca) => licenca.status === 'PROTOCOLADA',
     ).length;
 
     const totalBaixadas = usuarioRegulatorio
@@ -1298,6 +1464,7 @@ export class GestaoLicencasService {
         valida: number;
         aVencer: number;
         vencida: number;
+        protocolada: number;
         semVencimento: number;
         semResponsavel: number;
       }
@@ -1322,6 +1489,8 @@ export class GestaoLicencasService {
 
           vencida: 0,
 
+          protocolada: 0,
+
           semVencimento: 0,
 
           semResponsavel: 0,
@@ -1337,12 +1506,16 @@ export class GestaoLicencasService {
           dadosFilial.valida++;
           break;
 
-        case 'A_VENCER':
+        case 'A VENCER':
           dadosFilial.aVencer++;
           break;
 
         case 'VENCIDA':
           dadosFilial.vencida++;
+          break;
+
+        case 'PROTOCOLADA':
+          dadosFilial.protocolada++;
           break;
       }
 
@@ -1576,6 +1749,8 @@ export class GestaoLicencasService {
 
         vencida: totalVencidas,
 
+        protocolada: totalProtocoladas,
+
         ...(usuarioRegulatorio
           ? {
               baixada: totalBaixadas,
@@ -1656,7 +1831,7 @@ export class GestaoLicencasService {
         ativo: true,
 
         status: {
-          not: 'BAIXADA',
+          notIn: ['BAIXADA', 'PROTOCOLADA'],
         },
       },
 
@@ -1675,7 +1850,10 @@ export class GestaoLicencasService {
     }[] = [];
 
     for (const licenca of licencas) {
-      const novoStatus = this.calcularStatusLicenca(licenca.dataProximaRevisao);
+      const novoStatus = this.calcularStatusLicenca(
+        licenca.dataProximaRevisao,
+        licenca.status,
+      );
 
       if (novoStatus !== licenca.status) {
         atualizacoes.push({
