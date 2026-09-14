@@ -61,7 +61,8 @@
     "rxjs": "^7.8.1",
     "sharp": "^0.35.4",
     "swagger": "^0.7.5",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

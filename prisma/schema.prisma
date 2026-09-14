@@ -970,6 +970,16 @@ model LicencaVersao {
   @@index([licencaId, vigente])
 }
 
+model AniversariantesPj {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome           String
+  dataNascimento String
+  filial         String
+  ativo          Boolean @default(true)
+
+  @@unique([nome, dataNascimento, filial])
+}
+
 enum Area {
   Sistemas
   Infra
