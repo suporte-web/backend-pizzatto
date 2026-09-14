@@ -272,7 +272,26 @@ export class AniversariantesKmmService {
         ORIGEM: 'MANUAL',
       }));
 
-    const aniversariantes = [...aniversariantesKmm, ...aniversariantesPj];
+    const normalizarNome = (valor: string) =>
+      String(valor || '')
+        .trim()
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ');
+
+    const nomesKmm = new Set(
+      aniversariantesKmm.map((item) => normalizarNome(item.NOME)),
+    );
+
+    const aniversariantesPjSemDuplicados = aniversariantesPj.filter(
+      (item) => !nomesKmm.has(normalizarNome(item.NOME)),
+    );
+
+    const aniversariantes = [
+      ...aniversariantesKmm,
+      ...aniversariantesPjSemDuplicados,
+    ];
 
     aniversariantes.sort((a, b) => {
       let comparacao = 0;
