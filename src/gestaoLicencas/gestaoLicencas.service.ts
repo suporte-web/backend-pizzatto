@@ -36,7 +36,10 @@ export class GestaoLicencasService {
 
     const filialId = String(body.filialId).trim();
 
-    const orgao = String(body.orgao).trim();
+    const orgao =
+      body.orgao && String(body.orgao).trim()
+        ? String(body.orgao).trim()
+        : null;
 
     const responsavelEmail =
       body.responsavelEmail && String(body.responsavelEmail).trim()
@@ -104,24 +107,32 @@ export class GestaoLicencasService {
       user?.usuario ||
       'Usuário não identificado';
 
+    const diasNotificacaoAntes = this.parseArrayInteiros(
+      body.diasNotificacaoAntes,
+      [90, 60, 30, 15, 7, 3, 1, 0],
+    );
+
+    const diasNotificacaoDepois = this.parseArrayInteiros(
+      body.diasNotificacaoDepois,
+      [1, 3, 7, 15, 30],
+    );
+
     const licenca = await this.prisma.$transaction(async (transaction) => {
       const novaLicenca = await transaction.licenca.create({
         data: {
           nome,
           codigo,
           orgao,
-
           filialId,
           responsavelEmail,
-
           descricao,
-
           dataPublicacao,
           dataProximaRevisao,
-
           versaoAtual: '1.0',
-
           status,
+
+          diasNotificacaoAntes,
+          diasNotificacaoDepois,
         },
       });
 
@@ -860,7 +871,10 @@ export class GestaoLicencasService {
 
     const filialId = String(body.filialId).trim();
 
-    const orgao = String(body.orgao).trim();
+    const orgao =
+      body.orgao && String(body.orgao).trim()
+        ? String(body.orgao).trim()
+        : null;
 
     const licencaComMesmoCodigo = await this.prisma.licenca.findFirst({
       where: {
@@ -925,6 +939,22 @@ export class GestaoLicencasService {
       user?.cn ||
       user?.usuario ||
       'Usuário não identificado';
+
+    const diasNotificacaoAntes =
+      body.diasNotificacaoAntes !== undefined
+        ? this.parseArrayInteiros(
+            body.diasNotificacaoAntes,
+            licencaExistente.diasNotificacaoAntes,
+          )
+        : licencaExistente.diasNotificacaoAntes;
+
+    const diasNotificacaoDepois =
+      body.diasNotificacaoDepois !== undefined
+        ? this.parseArrayInteiros(
+            body.diasNotificacaoDepois,
+            licencaExistente.diasNotificacaoDepois,
+          )
+        : licencaExistente.diasNotificacaoDepois;
 
     const resultado = await this.prisma.$transaction(async (transaction) => {
       let versaoAtual = licencaExistente.LicencaVersao.find(
@@ -1014,6 +1044,9 @@ export class GestaoLicencasService {
           dataProximaRevisao,
 
           versaoAtual: numeroVersaoAtualizado,
+
+          diasNotificacaoAntes,
+          diasNotificacaoDepois,
         },
       });
 
@@ -1899,5 +1932,54 @@ export class GestaoLicencasService {
     }
 
     return data;
+  }
+
+  private parseArrayInteiros(valor: unknown, padrao: number[] = []): number[] {
+    if (valor === undefined || valor === null || valor === '') {
+      return padrao;
+    }
+
+    let array: unknown;
+
+    if (Array.isArray(valor)) {
+      array = valor;
+    } else if (typeof valor === 'string') {
+      const valorNormalizado = valor.trim();
+
+      if (!valorNormalizado) {
+        return padrao;
+      }
+
+      try {
+        array = JSON.parse(valorNormalizado);
+      } catch {
+        array = valorNormalizado.split(',').map((item) => item.trim());
+      }
+    } else {
+      throw new BadRequestException(
+        'Os dias de notificação possuem formato inválido.',
+      );
+    }
+
+    if (!Array.isArray(array)) {
+      throw new BadRequestException(
+        'Os dias de notificação devem ser uma lista.',
+      );
+    }
+
+    const numeros = array.map((item) => Number(item));
+
+    const possuiValorInvalido = numeros.some(
+      (numero) =>
+        Number.isNaN(numero) || !Number.isInteger(numero) || numero < 0,
+    );
+
+    if (possuiValorInvalido) {
+      throw new BadRequestException(
+        'Os dias de notificação devem ser números inteiros maiores ou iguais a zero.',
+      );
+    }
+
+    return [...new Set(numeros)].sort((a, b) => b - a);
   }
 }

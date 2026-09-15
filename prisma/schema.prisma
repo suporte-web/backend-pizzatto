@@ -921,24 +921,26 @@ model FotoPerfilWhatsappPadrao {
 }
 
 model Licenca {
-  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nome               String
-  codigo             String          @unique
-  filialId           String          @db.Uuid
-  responsavelId      String?
-  responsavelNome    String?
-  responsavelEmail   String?
-  descricao          String?
-  dataPublicacao     DateTime        @default(now())
-  dataProximaRevisao DateTime?
-  versaoAtual        String          @default("1.0")
-  status             String          @default("VALIDA")
-  ativo              Boolean         @default(true)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @default(now()) @db.Timestamp(6)
-  orgao              String?
-  LicencaFilial      LicencaFilial   @relation(fields: [filialId], references: [id])
-  LicencaVersao      LicencaVersao[]
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome                  String
+  codigo                String          @unique
+  filialId              String          @db.Uuid
+  responsavelId         String?
+  responsavelNome       String?
+  responsavelEmail      String?
+  descricao             String?
+  dataPublicacao        DateTime        @default(now())
+  dataProximaRevisao    DateTime?
+  versaoAtual           String          @default("1.0")
+  status                String          @default("VALIDA")
+  ativo                 Boolean         @default(true)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @default(now()) @db.Timestamp(6)
+  orgao                 String?
+  diasNotificacaoAntes  Int[]           @default([90, 60, 30, 15, 7, 3, 1, 0])
+  diasNotificacaoDepois Int[]           @default([1, 3, 7, 15, 30])
+  LicencaFilial         LicencaFilial   @relation(fields: [filialId], references: [id])
+  LicencaVersao         LicencaVersao[]
 }
 
 model LicencaFilial {

@@ -11,21 +11,6 @@ import { PrismaService } from '../prisma/prisma.service';
 export class LicencaNotificacaoService {
   private readonly logger = new Logger(LicencaNotificacaoService.name);
 
-  /**
-   * Dias antes do vencimento em que o sistema
-   * deverá enviar a notificação.
-   */
-  private readonly diasParaNotificar = [
-    90,
-    60,
-    30,
-    15,
-    7,
-    3,
-    1,
-    0,
-  ];
-
   private readonly transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT),
@@ -36,9 +21,7 @@ export class LicencaNotificacaoService {
     },
   });
 
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {
+  constructor(private readonly prisma: PrismaService) {
     this.transporter
       .verify()
       .then(() => {
@@ -97,35 +80,57 @@ export class LicencaNotificacaoService {
         continue;
       }
 
-      const destinatario = String(
-        licenca.responsavelEmail || '',
-      ).trim();
+      const destinatario = String(licenca.responsavelEmail || '').trim();
 
       if (!destinatario) {
-        this.logger.warn(
-          `Licença ${licenca.nome} sem e-mail do responsável.`,
-        );
+        this.logger.warn(`Licença ${licenca.nome} sem e-mail do responsável.`);
 
         ignorados++;
         continue;
       }
 
-      const dataVencimento = new Date(
-        licenca.dataProximaRevisao,
-      );
+      const dataVencimento = new Date(licenca.dataProximaRevisao);
 
       dataVencimento.setHours(0, 0, 0, 0);
 
-      const diasRestantes =
-        this.calcularDiferencaEmDias(
-          hoje,
-          dataVencimento,
-        );
+      const diasRestantes = this.calcularDiferencaEmDias(hoje, dataVencimento);
 
-      const deveNotificar =
-        this.diasParaNotificar.includes(
-          diasRestantes,
-        ) || diasRestantes < 0;
+      const diasNotificacaoAntes = Array.isArray(licenca.diasNotificacaoAntes)
+        ? licenca.diasNotificacaoAntes
+        : [];
+
+      const diasNotificacaoDepois = Array.isArray(licenca.diasNotificacaoDepois)
+        ? licenca.diasNotificacaoDepois
+        : [];
+
+      let deveNotificar = false;
+
+      if (diasRestantes >= 0) {
+        /**
+         * Licença ainda não venceu.
+         *
+         * Exemplo:
+         * diasRestantes = 30
+         *
+         * Verifica se 30 está configurado em
+         * diasNotificacaoAntes.
+         */
+        deveNotificar = diasNotificacaoAntes.includes(diasRestantes);
+      } else {
+        /**
+         * Licença já venceu.
+         *
+         * diasRestantes será negativo:
+         *
+         * -1 = venceu há 1 dia
+         * -3 = venceu há 3 dias
+         *
+         * Por isso usamos Math.abs().
+         */
+        const diasAposVencimento = Math.abs(diasRestantes);
+
+        deveNotificar = diasNotificacaoDepois.includes(diasAposVencimento);
+      }
 
       if (!deveNotificar) {
         ignorados++;
@@ -133,11 +138,10 @@ export class LicencaNotificacaoService {
       }
 
       try {
-        const resultadoEmail =
-          await this.enviarEmailVencimento({
-            licenca,
-            diasRestantes,
-          });
+        const resultadoEmail = await this.enviarEmailVencimento({
+          licenca,
+          diasRestantes,
+        });
 
         await this.registrarAuditLogEmail({
           licenca,
@@ -159,9 +163,7 @@ export class LicencaNotificacaoService {
 
         this.logger.error(
           `Erro ao notificar a licença ${licenca.nome}:`,
-          error instanceof Error
-            ? error.stack
-            : error,
+          error instanceof Error ? error.stack : error,
         );
       }
     }
@@ -189,18 +191,12 @@ export class LicencaNotificacaoService {
     licenca: any;
     diasRestantes: number;
   }) {
-    const destinatario = String(
-      licenca.responsavelEmail,
-    ).trim();
+    const destinatario = String(licenca.responsavelEmail).trim();
 
     const responsavelNome =
-      licenca.responsavelNome?.trim() ||
-      'Responsável pela licença';
+      licenca.responsavelNome?.trim() || 'Responsável pela licença';
 
-    const assunto = this.montarAssunto(
-      licenca.nome,
-      diasRestantes,
-    );
+    const assunto = this.montarAssunto(licenca.nome, diasRestantes);
 
     const html = this.montarTemplateEmail({
       licenca,
@@ -216,10 +212,7 @@ export class LicencaNotificacaoService {
         html,
       });
     } catch (error) {
-      this.logger.error(
-        'Erro no disparo do e-mail da licença:',
-        error,
-      );
+      this.logger.error('Erro no disparo do e-mail da licença:', error);
 
       throw new InternalServerErrorException(
         'Não foi possível enviar o e-mail de vencimento da licença.',
@@ -227,10 +220,7 @@ export class LicencaNotificacaoService {
     }
   }
 
-  private montarAssunto(
-    nomeLicenca: string,
-    diasRestantes: number,
-  ) {
+  private montarAssunto(nomeLicenca: string, diasRestantes: number) {
     if (diasRestantes < 0) {
       return `Licença vencida | ${nomeLicenca}`;
     }
@@ -255,40 +245,23 @@ export class LicencaNotificacaoService {
     responsavelNome: string;
     diasRestantes: number;
   }) {
-    const mensagemStatus =
-      this.montarMensagemStatus(
-        diasRestantes,
-      );
+    const mensagemStatus = this.montarMensagemStatus(diasRestantes);
 
     const vencido = diasRestantes < 0;
 
-    const corPrincipal = vencido
-      ? '#c62828'
-      : '#1565c0';
+    const corPrincipal = vencido ? '#c62828' : '#1565c0';
 
-    const corFundoAlerta = vencido
-      ? '#fff4f4'
-      : '#f3f8fd';
+    const corFundoAlerta = vencido ? '#fff4f4' : '#f3f8fd';
 
-    const corBordaAlerta = vencido
-      ? '#efc6c6'
-      : '#c9dff3';
+    const corBordaAlerta = vencido ? '#efc6c6' : '#c9dff3';
 
-    const corTextoAlerta = vencido
-      ? '#8e2424'
-      : '#174f7f';
+    const corTextoAlerta = vencido ? '#8e2424' : '#174f7f';
 
-    const dataVencimento = this.formatarData(
-      licenca.dataVencimento,
-    );
+    const dataVencimento = this.formatarData(licenca.dataProximaRevisao);
 
-    const filial =
-      licenca.filial?.nome ||
-      'Não informada';
+    const filial = licenca.LicencaFilial?.nome || 'Não informada';
 
-    const cnpjFilial =
-      licenca.filial?.cnpj ||
-      'Não informado';
+    const cnpjFilial = licenca.LicencaFilial?.cnpj || 'Não informado';
 
     return `
       <div
@@ -366,9 +339,7 @@ export class LicencaNotificacaoService {
                     >
                       Prezado(a),
                       <strong>
-                        ${this.escaparHtml(
-                          responsavelNome,
-                        )}
+                        ${this.escaparHtml(responsavelNome)}
                       </strong>.
                     </p>
 
@@ -432,19 +403,12 @@ export class LicencaNotificacaoService {
 
                       ${this.montarLinhaDetalhe(
                         'Licença',
-                        licenca.nome ||
-                          'Não informada',
+                        licenca.nome || 'Não informada',
                       )}
 
-                      ${this.montarLinhaDetalhe(
-                        'Filial',
-                        filial,
-                      )}
+                      ${this.montarLinhaDetalhe('Filial', filial)}
 
-                      ${this.montarLinhaDetalhe(
-                        'CNPJ',
-                        cnpjFilial,
-                      )}
+                      ${this.montarLinhaDetalhe('CNPJ', cnpjFilial)}
 
                       ${this.montarLinhaDetalhe(
                         'Data de vencimento',
@@ -536,10 +500,7 @@ export class LicencaNotificacaoService {
     `;
   }
 
-  private montarLinhaDetalhe(
-    label: string,
-    valor: string,
-  ) {
+  private montarLinhaDetalhe(label: string, valor: string) {
     return `
       <tr>
         <td
@@ -564,31 +525,21 @@ export class LicencaNotificacaoService {
             color:#555555;
           "
         >
-          ${this.escaparHtml(
-            String(valor),
-          )}
+          ${this.escaparHtml(String(valor))}
         </td>
       </tr>
     `;
   }
 
-  private montarMensagemStatus(
-    diasRestantes: number,
-  ) {
+  private montarMensagemStatus(diasRestantes: number) {
     if (diasRestantes < 0) {
-      const diasVencido = Math.abs(
-        diasRestantes,
-      );
+      const diasVencido = Math.abs(diasRestantes);
 
       return `
         A licença está vencida há
         <strong>
           ${diasVencido}
-          ${
-            diasVencido === 1
-              ? 'dia'
-              : 'dias'
-          }
+          ${diasVencido === 1 ? 'dia' : 'dias'}
         </strong>.
         Recomendamos que a regularização seja realizada
         o quanto antes.
@@ -617,48 +568,31 @@ export class LicencaNotificacaoService {
     `;
   }
 
-  private calcularDiferencaEmDias(
-    dataInicial: Date,
-    dataFinal: Date,
-  ) {
-    const milissegundosPorDia =
-      1000 * 60 * 60 * 24;
+  private calcularDiferencaEmDias(dataInicial: Date, dataFinal: Date) {
+    const milissegundosPorDia = 1000 * 60 * 60 * 24;
 
     return Math.round(
-      (
-        dataFinal.getTime() -
-        dataInicial.getTime()
-      ) / milissegundosPorDia,
+      (dataFinal.getTime() - dataInicial.getTime()) / milissegundosPorDia,
     );
   }
 
-  private formatarData(
-    data: Date | string | null,
-  ) {
+  private formatarData(data: Date | string | null) {
     if (!data) {
       return 'Não informada';
     }
 
-    const dataConvertida =
-      new Date(data);
+    const dataConvertida = new Date(data);
 
-    if (
-      Number.isNaN(
-        dataConvertida.getTime(),
-      )
-    ) {
+    if (Number.isNaN(dataConvertida.getTime())) {
       return 'Data inválida';
     }
 
-    return new Intl.DateTimeFormat(
-      'pt-BR',
-      {
-        timeZone: 'America/Sao_Paulo',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      },
-    ).format(dataConvertida);
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(dataConvertida);
   }
 
   private escaparHtml(valor: string) {
@@ -681,10 +615,7 @@ export class LicencaNotificacaoService {
     diasRestantes: number;
     messageId?: string;
   }) {
-    const motivo =
-      this.montarMotivoAuditLog(
-        diasRestantes,
-      );
+    const motivo = this.montarMotivoAuditLog(diasRestantes);
 
     await this.prisma.audit_logs.create({
       data: {
@@ -694,12 +625,9 @@ export class LicencaNotificacaoService {
           `da licença ${licenca.nome}`,
         ].join(' '),
 
-        entidade:
-          'SISTEMA - GESTÃO DE LICENÇAS',
+        entidade: 'SISTEMA - GESTÃO DE LICENÇAS',
 
-        filialEntidade:
-          licenca.filial?.nome ||
-          'Pizzattolog',
+        filialEntidade: licenca.LicencaFilial?.nome || 'Pizzattolog',
 
         ipAddress: 'SISTEMA',
 
@@ -720,17 +648,12 @@ export class LicencaNotificacaoService {
     });
   }
 
-  private montarMotivoAuditLog(
-    diasRestantes: number,
-  ) {
+  private montarMotivoAuditLog(diasRestantes: number) {
     if (diasRestantes < 0) {
-      const diasVencido =
-        Math.abs(diasRestantes);
+      const diasVencido = Math.abs(diasRestantes);
 
       return `licença vencida há ${diasVencido} ${
-        diasVencido === 1
-          ? 'dia'
-          : 'dias'
+        diasVencido === 1 ? 'dia' : 'dias'
       }`;
     }
 
