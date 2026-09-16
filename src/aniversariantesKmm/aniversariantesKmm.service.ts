@@ -155,7 +155,7 @@ export class AniversariantesKmmService {
 
         PMS."DESCRICAO" AS "SITUACAO",
 
-        UN."UNIDADE_NEGOCIO" AS "FILIAL",
+        FD."CENTRO_CUSTO" AS "FILIAL",
 
         P."DATE_INSERT",
 
@@ -181,8 +181,8 @@ export class AniversariantesKmmService {
       INNER JOIN KSS.FUNCIONARIO_MATR_HISTORICO FMH
         ON FMH."COD_PESSOA" = P."COD_PESSOA"
 
-      INNER JOIN KSS.UNIDADE_NEGOCIO UN
-        ON UN."COD_PESSOA" = FMH."COD_PESSOA_FILIAL"
+      INNER JOIN FOLHA.FUNCIONARIO_DADOS FD
+        ON FD."COD_PESSOA" = P."COD_PESSOA"
 
       WHERE M."NUM_MODALIDADE" = 4
 
