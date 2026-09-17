@@ -44,18 +44,6 @@ export class GestaoLicencasService {
 
     const descricao = body.descricao ? String(body.descricao).trim() : null;
 
-    const licencaExistente = await this.prisma.licenca.findFirst({
-      where: {
-        codigo,
-      },
-    });
-
-    if (licencaExistente) {
-      throw new ConflictException(
-        `Já existe uma licença cadastrada com o código ${codigo}.`,
-      );
-    }
-
     const filial = await this.prisma.licencaFilial.findUnique({
       where: {
         id: filialId,
@@ -835,10 +823,6 @@ export class GestaoLicencasService {
       throw new BadRequestException('O nome da licença é obrigatório.');
     }
 
-    if (!body.codigo || !String(body.codigo).trim()) {
-      throw new BadRequestException('O código da licença é obrigatório.');
-    }
-
     if (!body.filialId || !String(body.filialId).trim()) {
       throw new BadRequestException('A filial da licença é obrigatória.');
     }
@@ -871,26 +855,6 @@ export class GestaoLicencasService {
       body.orgao && String(body.orgao).trim()
         ? String(body.orgao).trim()
         : null;
-
-    const licencaComMesmoCodigo = await this.prisma.licenca.findFirst({
-      where: {
-        codigo,
-
-        id: {
-          not: licencaId,
-        },
-      },
-
-      select: {
-        id: true,
-      },
-    });
-
-    if (licencaComMesmoCodigo) {
-      throw new ConflictException(
-        `Já existe outra licença cadastrada com o código ${codigo}.`,
-      );
-    }
 
     const filial = await this.prisma.licencaFilial.findUnique({
       where: {
