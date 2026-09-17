@@ -44,7 +44,7 @@ export class GestaoLicencasService {
 
     const descricao = body.descricao ? String(body.descricao).trim() : null;
 
-    const licencaExistente = await this.prisma.licenca.findUnique({
+    const licencaExistente = await this.prisma.licenca.findFirst({
       where: {
         codigo,
       },

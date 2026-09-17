@@ -923,7 +923,7 @@ model FotoPerfilWhatsappPadrao {
 model Licenca {
   id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome                  String
-  codigo                String          @unique
+  codigo                String?
   filialId              String          @db.Uuid
   responsavelId         String?
   responsavelNome       String?
