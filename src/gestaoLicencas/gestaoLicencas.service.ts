@@ -22,10 +22,6 @@ export class GestaoLicencasService {
       throw new BadRequestException('O nome da licença é obrigatório.');
     }
 
-    if (!body.codigo || !String(body.codigo).trim()) {
-      throw new BadRequestException('O código da licença é obrigatório.');
-    }
-
     if (!body.filialId || !String(body.filialId).trim()) {
       throw new BadRequestException('A filial da licença é obrigatória.');
     }
