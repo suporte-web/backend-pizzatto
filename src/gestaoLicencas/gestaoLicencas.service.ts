@@ -376,10 +376,6 @@ export class GestaoLicencasService {
       AND: [],
     };
 
-    // =========================================================
-    // ROLES
-    // =========================================================
-
     const rolesUsuario = Array.isArray(user?.roles)
       ? user.roles.map((role: string) => String(role).trim().toUpperCase())
       : [
@@ -392,27 +388,16 @@ export class GestaoLicencasService {
       rolesUsuario.includes('DESENVOLVIMENTO') ||
       rolesUsuario.includes('REGULATORIO');
 
-    // =========================================================
-    // STATUS
-    // =========================================================
-
     const statusNormalizado =
       status && String(status).trim()
         ? String(status).trim().toUpperCase().replace(/\s+/g, '_')
         : null;
 
-    /*
-     * Usuário sem permissão não pode solicitar BAIXADA.
-     */
     if (statusNormalizado === 'BAIXADA' && !podeVisualizarBaixadas) {
       throw new ForbiddenException(
         'Você não possui permissão para visualizar licenças baixadas.',
       );
     }
-
-    // =========================================================
-    // PESQUISA
-    // =========================================================
 
     if (pesquisa && String(pesquisa).trim()) {
       const termo = String(pesquisa).trim();
@@ -447,57 +432,25 @@ export class GestaoLicencasService {
       });
     }
 
-    // =========================================================
-    // FILIAL
-    // =========================================================
-
     if (filialId) {
       where.filialId = String(filialId);
     }
 
-    // =========================================================
-    // REGRA DE STATUS / BAIXADA
-    // =========================================================
-
     if (statusNormalizado) {
       where.status = statusNormalizado;
     } else {
-      /*
-       * Sem status específico:
-       *
-       * DESENVOLVIMENTO / REGULATORIO
-       * podem visualizar BAIXADA normalmente.
-       *
-       * Demais usuários nunca visualizam BAIXADA.
-       */
       if (!podeVisualizarBaixadas) {
         where.status = {
           not: 'BAIXADA',
         };
       } else if (this.parseBoolean(excluirBaixadas)) {
-        /*
-         * Para usuários autorizados,
-         * ainda permitimos que o frontend peça
-         * explicitamente para esconder baixadas.
-         */
         where.status = {
           not: 'BAIXADA',
         };
       }
     }
 
-    // =========================================================
-    // ATIVO
-    // =========================================================
-
     if (podeVisualizarBaixadas) {
-      /*
-       * Quando estiver buscando BAIXADA,
-       * NÃO filtramos por ativo.
-       *
-       * Isso é importante porque uma licença baixada
-       * pode estar ativo = false.
-       */
       if (
         statusNormalizado !== 'BAIXADA' &&
         ativo !== undefined &&
@@ -507,16 +460,8 @@ export class GestaoLicencasService {
         where.ativo = this.parseBoolean(ativo);
       }
     } else {
-      /*
-       * Usuários comuns:
-       * somente licenças ativas.
-       */
       where.ativo = true;
     }
-
-    // =========================================================
-    // DATA DE PUBLICAÇÃO
-    // =========================================================
 
     if (dataPublicacaoInicio || dataPublicacaoFim) {
       where.dataPublicacao = {};
@@ -550,10 +495,6 @@ export class GestaoLicencasService {
       }
     }
 
-    // =========================================================
-    // DATA DE REVISÃO
-    // =========================================================
-
     if (dataRevisaoInicio || dataRevisaoFim) {
       where.dataProximaRevisao = {};
 
@@ -586,17 +527,9 @@ export class GestaoLicencasService {
       }
     }
 
-    // =========================================================
-    // REMOVE AND VAZIO
-    // =========================================================
-
     if (where.AND.length === 0) {
       delete where.AND;
     }
-
-    // =========================================================
-    // CONSULTA
-    // =========================================================
 
     const [result, total] = await this.prisma.$transaction([
       this.prisma.licenca.findMany({
@@ -658,36 +591,15 @@ export class GestaoLicencasService {
     const podeVisualizarInativas =
       roles.includes('DESENVOLVIMENTO') || roles.includes('REGULATORIO');
 
-    // =========================================================
-    // FILTRO DAS LICENÇAS
-    // =========================================================
-
     const whereLicenca: any = {};
 
     if (podeVisualizarInativas) {
-      /*
-       * DESENVOLVIMENTO / REGULATORIO:
-       *
-       * Sem filtro ativo:
-       * traz licenças ativas + inativas.
-       *
-       * Se informar ativo:
-       * respeita o filtro.
-       */
       if (ativo !== undefined && ativo !== null && ativo !== '') {
         whereLicenca.ativo = this.parseBoolean(ativo);
       }
     } else {
-      /*
-       * Demais usuários:
-       * somente licenças ativas.
-       */
       whereLicenca.ativo = true;
     }
-
-    // =========================================================
-    // BUSCA AS LICENÇAS E IDENTIFICA AS FILIAIS
-    // =========================================================
 
     const licencas = await this.prisma.licenca.findMany({
       where: whereLicenca,
@@ -707,10 +619,6 @@ export class GestaoLicencasService {
         total: 0,
       };
     }
-
-    // =========================================================
-    // FILTRO DAS FILIAIS
-    // =========================================================
 
     const whereFilial: any = {
       id: {
@@ -743,42 +651,19 @@ export class GestaoLicencasService {
       whereFilial.OR = filtrosPesquisa;
     }
 
-    // =========================================================
-    // PERMISSÃO DAS FILIAIS
-    // =========================================================
-
     if (podeVisualizarInativas) {
-      /*
-       * DESENVOLVIMENTO / REGULATORIO:
-       * pode visualizar filial ativa ou inativa.
-       *
-       * Se ativo não foi informado,
-       * não adicionamos filtro.
-       */
       if (ativo !== undefined && ativo !== null && ativo !== '') {
         whereFilial.ativo = this.parseBoolean(ativo);
       }
     } else {
-      /*
-       * Outros usuários:
-       * somente filial ativa.
-       */
       whereFilial.ativo = true;
     }
-
-    // =========================================================
-    // TOTAL
-    // =========================================================
 
     const total = await this.prisma.licencaFilial.count({
       where: whereFilial,
     });
 
     const skip = (pageNumber - 1) * limitNumber;
-
-    // =========================================================
-    // RESULTADO
-    // =========================================================
 
     const result = await this.prisma.licencaFilial.findMany({
       where: whereFilial,
@@ -1114,12 +999,6 @@ export class GestaoLicencasService {
   }
 
   async dashboardLicencas(user: any) {
-    /*
-     * ============================================================
-     * PERMISSÕES
-     * ============================================================
-     */
-
     const rolesUsuario = Array.isArray(user?.roles)
       ? user.roles.map((role: string) => String(role).trim().toUpperCase())
       : [
@@ -1130,37 +1009,11 @@ export class GestaoLicencasService {
 
     const usuarioRegulatorio = rolesUsuario.includes('REGULATORIO');
 
-    /*
-     * ============================================================
-     * SINCRONIZA STATUS AUTOMÁTICOS
-     * ============================================================
-     *
-     * Antes de montar o dashboard, garantimos que:
-     *
-     * > 30 dias  = VALIDA
-     * 0-30 dias  = A_VENCER
-     * vencida    = VENCIDA
-     *
-     * BAIXADA e PROTOCOLADA nunca são alteradas automaticamente.
-     */
-
     await this.sincronizarStatusLicencas();
-
-    /*
-     * ============================================================
-     * DATA ATUAL
-     * ============================================================
-     */
 
     const hoje = new Date();
 
     hoje.setHours(0, 0, 0, 0);
-
-    /*
-     * ============================================================
-     * LICENÇAS OPERACIONAIS
-     * ============================================================
-     */
 
     const licencas = await this.prisma.licenca.findMany({
       where: {
@@ -1191,12 +1044,6 @@ export class GestaoLicencasService {
       ],
     });
 
-    /*
-     * ============================================================
-     * BAIXADAS
-     * ============================================================
-     */
-
     const licencasBaixadas = usuarioRegulatorio
       ? await this.prisma.licenca.findMany({
           where: {
@@ -1218,12 +1065,6 @@ export class GestaoLicencasService {
           },
         })
       : [];
-
-    /*
-     * ============================================================
-     * CONTADORES PRINCIPAIS
-     * ============================================================
-     */
 
     const total = licencas.length;
 
@@ -1247,14 +1088,15 @@ export class GestaoLicencasService {
       ? licencasBaixadas.length
       : undefined;
 
-    /*
-     * ============================================================
-     * ÍNDICES
-     * ============================================================
-     */
-
     const percentualConformidade =
-      total > 0 ? Number(((totalValidas / total) * 100).toFixed(2)) : 0;
+      total > 0
+        ? Number(
+            (
+              ((totalValidas + totalAVencer + totalProtocoladas) / total) *
+              100
+            ).toFixed(2),
+          )
+        : 0;
 
     const totalSemPendenciaCritica = totalValidas + totalAVencer;
 
@@ -1262,12 +1104,6 @@ export class GestaoLicencasService {
       total > 0
         ? Number(((totalSemPendenciaCritica / total) * 100).toFixed(2))
         : 0;
-
-    /*
-     * ============================================================
-     * FAIXAS DE VENCIMENTO
-     * ============================================================
-     */
 
     const faixasVencimento = {
       vencidas: 0,
@@ -1279,30 +1115,15 @@ export class GestaoLicencasService {
       semData: 0,
     };
 
-    /*
-     * ============================================================
-     * QUALIDADE DO CADASTRO
-     * ============================================================
-     */
-
     let semResponsavel = 0;
 
     let semVencimento = 0;
 
     let semArquivoVigente = 0;
 
-    /*
-     * ============================================================
-     * LICENÇAS CRÍTICAS
-     * ============================================================
-     */
-
     const licencasCriticas: any[] = [];
 
     for (const licenca of licencas) {
-      /*
-       * Responsável
-       */
       if (
         !licenca.responsavelEmail ||
         !String(licenca.responsavelEmail).trim()
@@ -1310,9 +1131,6 @@ export class GestaoLicencasService {
         semResponsavel++;
       }
 
-      /*
-       * Arquivo vigente
-       */
       const versaoVigente = licenca.LicencaVersao.find(
         (versao) => versao.vigente,
       );
@@ -1321,9 +1139,6 @@ export class GestaoLicencasService {
         semArquivoVigente++;
       }
 
-      /*
-       * Sem data
-       */
       if (!licenca.dataProximaRevisao) {
         semVencimento++;
 
@@ -1332,9 +1147,6 @@ export class GestaoLicencasService {
         continue;
       }
 
-      /*
-       * Dias restantes.
-       */
       const vencimento = new Date(licenca.dataProximaRevisao);
 
       vencimento.setHours(0, 0, 0, 0);
@@ -1343,9 +1155,6 @@ export class GestaoLicencasService {
         (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-      /*
-       * Faixas.
-       */
       if (diferencaDias < 0) {
         faixasVencimento.vencidas++;
       } else if (diferencaDias <= 7) {
@@ -1360,12 +1169,6 @@ export class GestaoLicencasService {
         faixasVencimento.acima60Dias++;
       }
 
-      /*
-       * Consideramos crítica:
-       *
-       * - vencida
-       * - vence em até 30 dias
-       */
       if (diferencaDias <= 30) {
         licencasCriticas.push({
           id: licenca.id,
@@ -1393,18 +1196,7 @@ export class GestaoLicencasService {
       }
     }
 
-    /*
-     * Ordenação:
-     *
-     * mais vencida -> menor número de dias
-     */
     licencasCriticas.sort((a, b) => a.diasParaVencer - b.diasParaVencer);
-
-    /*
-     * ============================================================
-     * PRÓXIMOS VENCIMENTOS
-     * ============================================================
-     */
 
     const proximosVencimentos = licencas
       .filter((licenca) => licenca.dataProximaRevisao)
@@ -1441,12 +1233,6 @@ export class GestaoLicencasService {
       )
       .sort((a, b) => a.diasParaVencer - b.diasParaVencer)
       .slice(0, 20);
-
-    /*
-     * ============================================================
-     * AGRUPAMENTO POR FILIAL
-     * ============================================================
-     */
 
     const mapaFiliais = new Map<
       string,
@@ -1534,12 +1320,6 @@ export class GestaoLicencasService {
       }))
       .sort((a, b) => b.totalPendencias - a.totalPendencias);
 
-    /*
-     * ============================================================
-     * RANKING DE FILIAIS
-     * ============================================================
-     */
-
     const rankingFiliais = porFilial
       .map((filial) => ({
         filialId: filial.filialId,
@@ -1553,12 +1333,6 @@ export class GestaoLicencasService {
         pendencias: filial.totalPendencias,
       }))
       .sort((a, b) => b.pendencias - a.pendencias);
-
-    /*
-     * ============================================================
-     * COBERTURA / QUALIDADE
-     * ============================================================
-     */
 
     const comResponsavel = total - semResponsavel;
 
@@ -1588,12 +1362,6 @@ export class GestaoLicencasService {
       percentualComArquivoVigente:
         total > 0 ? Number(((comArquivoVigente / total) * 100).toFixed(2)) : 0,
     };
-
-    /*
-     * ============================================================
-     * ÚLTIMAS ATUALIZAÇÕES
-     * ============================================================
-     */
 
     const ultimasAtualizacoes = await this.prisma.licenca.findMany({
       where: usuarioRegulatorio
@@ -1633,13 +1401,6 @@ export class GestaoLicencasService {
       }),
     );
 
-    /*
-     * ============================================================
-     * PUBLICAÇÕES DE VERSÕES
-     * ÚLTIMOS 12 MESES
-     * ============================================================
-     */
-
     const inicioPeriodo = new Date();
 
     inicioPeriodo.setMonth(inicioPeriodo.getMonth() - 11);
@@ -1666,10 +1427,6 @@ export class GestaoLicencasService {
 
     const mapaPublicacoes = new Map<string, number>();
 
-    /*
-     * Inicializa os 12 meses com zero,
-     * inclusive meses sem publicação.
-     */
     for (let i = 0; i < 12; i++) {
       const data = new Date();
 
@@ -1704,12 +1461,6 @@ export class GestaoLicencasService {
       }),
     );
 
-    /*
-     * ============================================================
-     * BAIXADAS RECENTES
-     * ============================================================
-     */
-
     const baixadasRecentes = usuarioRegulatorio
       ? licencasBaixadas.slice(0, 10).map((licenca) => ({
           id: licenca.id,
@@ -1725,12 +1476,6 @@ export class GestaoLicencasService {
           responsavelEmail: licenca.responsavelEmail,
         }))
       : undefined;
-
-    /*
-     * ============================================================
-     * RETORNO
-     * ============================================================
-     */
 
     return {
       resumo: {
