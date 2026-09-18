@@ -253,7 +253,10 @@ export class GestaoLicencasService {
   async findByFilterLicencasFiliais(body: any, user: any) {
     const { pesquisa, ativo, page = 1, limit = 10 } = body;
 
-    const skip = (page - 1) * limit;
+    const pagina = Number(page) || 1;
+    const limite = Number(limit) || 10;
+
+    const skip = (pagina - 1) * limite;
 
     const where: any = {};
 
@@ -282,38 +285,41 @@ export class GestaoLicencasService {
       ];
     }
 
-    // =========================================================
-    // FILTRO DE ATIVO
-    // =========================================================
-
     if (podeVisualizarInativas) {
-      // Usuários autorizados podem filtrar
-      // por ativo/inativo normalmente.
       if (ativo !== undefined && ativo !== null && ativo !== '') {
-        where.ativo = ativo;
+        where.ativo = ativo === true || ativo === 'true';
       }
     } else {
-      // Demais usuários sempre visualizam
-      // somente filiais ativas.
       where.ativo = true;
     }
 
-    const result = await this.prisma.licencaFilial.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: {
-        nome: 'asc',
-      },
-    });
+    const [result, total] = await this.prisma.$transaction([
+      this.prisma.licencaFilial.findMany({
+        where,
+        skip,
+        take: limite,
 
-    const total = await this.prisma.licencaFilial.count({
-      where,
-    });
+        orderBy: [
+          {
+            cnpj: 'asc',
+          },
+          {
+            nome: 'asc',
+          },
+        ],
+      }),
+
+      this.prisma.licencaFilial.count({
+        where,
+      }),
+    ]);
 
     return {
       result,
       total,
+      page: pagina,
+      limit: limite,
+      totalPages: Math.ceil(total / limite),
     };
   }
 
