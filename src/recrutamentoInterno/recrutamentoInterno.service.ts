@@ -150,7 +150,7 @@ export class RecrutamentoInternoService {
         RecrutamentoInternoCandidato: true,
       },
       orderBy: {
-        createdAt: 'desc',
+        dataLimite: 'desc',
       },
     });
 
