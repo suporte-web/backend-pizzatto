@@ -266,24 +266,28 @@ model Conversa {
 }
 
 model Mensagem {
-  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversaId   String       @db.Uuid
-  remetenteId  String       @db.Uuid
-  conteudo     String?
-  createdAt    DateTime     @default(now()) @db.Timestamp(6)
-  deletedAt    DateTime?
-  updatedAt    DateTime     @default(now()) @db.Timestamp(6)
-  arquivoUrl   String?
-  mimeType     String?
-  nomeArquivo  String?
-  tamanhoBytes Int?
-  tipo         TipoMensagem @default(TEXTO)
-  nomeSalvo    String?
-  Conversa     Conversa     @relation(fields: [conversaId], references: [id], onDelete: Cascade)
-  UsuarioChat  UsuarioChat  @relation(fields: [remetenteId], references: [id])
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversaId           String       @db.Uuid
+  remetenteId          String       @db.Uuid
+  conteudo             String?
+  createdAt            DateTime     @default(now()) @db.Timestamp(6)
+  deletedAt            DateTime?
+  updatedAt            DateTime     @default(now()) @db.Timestamp(6)
+  arquivoUrl           String?
+  mimeType             String?
+  nomeArquivo          String?
+  tamanhoBytes         Int?
+  tipo                 TipoMensagem @default(TEXTO)
+  nomeSalvo            String?
+  mensagemRespondidaId String?      @db.Uuid
+  Conversa             Conversa     @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  Mensagem             Mensagem?    @relation("MensagemToMensagem", fields: [mensagemRespondidaId], references: [id])
+  other_Mensagem       Mensagem[]   @relation("MensagemToMensagem")
+  UsuarioChat          UsuarioChat  @relation(fields: [remetenteId], references: [id])
 
   @@index([remetenteId])
   @@index([conversaId, createdAt])
+  @@index([mensagemRespondidaId])
 }
 
 model ParticipanteConversa {
@@ -982,6 +986,81 @@ model AniversariantesPj {
   @@unique([nome, dataNascimento, filial])
 }
 
+model FeedComentario {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicacaoId       String               @db.Uuid
+  adObjectGuid       String
+  autorNome          String
+  autorFoto          String?
+  texto              String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @default(now()) @db.Timestamp(6)
+  ativo              Boolean              @default(true)
+  FeedPublicacao     FeedPublicacao       @relation(fields: [publicacaoId], references: [id], onDelete: Cascade)
+  FeedComentarioLike FeedComentarioLike[]
+
+  @@index([createdAt])
+  @@index([publicacaoId])
+}
+
+model FeedCurtida {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicacaoId   String         @db.Uuid
+  adObjectGuid   String
+  usuarioNome    String
+  createdAt      DateTime       @default(now())
+  FeedPublicacao FeedPublicacao @relation(fields: [publicacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([publicacaoId, adObjectGuid])
+  @@index([publicacaoId])
+}
+
+model FeedMidia {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicacaoId   String         @db.Uuid
+  tipo           FeedTipoMidia
+  url            String
+  nomeOriginal   String?
+  mimeType       String?
+  tamanho        Int?
+  ordem          Int            @default(0)
+  createdAt      DateTime       @default(now())
+  FeedPublicacao FeedPublicacao @relation(fields: [publicacaoId], references: [id], onDelete: Cascade)
+
+  @@index([publicacaoId])
+}
+
+model FeedPublicacao {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid   String
+  autorNome      String
+  autorEmail     String?
+  autorFoto      String?
+  departamento   String?
+  texto          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @db.Timestamp(6)
+  ativo          Boolean          @default(true)
+  FeedComentario FeedComentario[]
+  FeedCurtida    FeedCurtida[]
+  FeedMidia      FeedMidia[]
+
+  @@index([adObjectGuid])
+  @@index([createdAt])
+}
+
+model FeedComentarioLike {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  comentarioId   String         @db.Uuid
+  adObjectGuid   String
+  usuarioNome    String
+  createdAt      DateTime       @default(now())
+  FeedComentario FeedComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+
+  @@unique([comentarioId, adObjectGuid])
+  @@index([comentarioId])
+}
+
 enum Area {
   Sistemas
   Infra
@@ -1049,4 +1128,10 @@ enum RegimeTributarioCnpj {
   LUCRO_REAL
   LUCRO_ARBITRADO
   NAO_IDENTIFICADO
+}
+
+enum FeedTipoMidia {
+  IMAGEM
+  VIDEO
+  ARQUIVO
 }

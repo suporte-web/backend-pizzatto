@@ -30,6 +30,7 @@ import { AniversariantesKmmModule } from './aniversariantesKmm/aniversariantesKm
 import { FotoPerfilWhatsappModule } from './fotoPerfilWhatsapp/fotoPerfilWhatsapp.module';
 import { FotoPerfilWhatsappPadraoModule } from './fotoPerfilWhatsappPadrao/fotoPerfilWhatsappPadrao.module';
 import { GestaoLicencasModule } from './gestaoLicencas/gestaoLicencas.module';
+import { FeedModule } from './feed/feed.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { GestaoLicencasModule } from './gestaoLicencas/gestaoLicencas.module';
     FotoPerfilWhatsappModule,
     FotoPerfilWhatsappPadraoModule,
     GestaoLicencasModule,
+    FeedModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
