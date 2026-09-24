@@ -1009,6 +1009,7 @@ model FeedCurtida {
   adObjectGuid   String
   usuarioNome    String
   createdAt      DateTime       @default(now())
+  autorFoto      String?
   FeedPublicacao FeedPublicacao @relation(fields: [publicacaoId], references: [id], onDelete: Cascade)
 
   @@unique([publicacaoId, adObjectGuid])
@@ -1055,6 +1056,7 @@ model FeedComentarioLike {
   adObjectGuid   String
   usuarioNome    String
   createdAt      DateTime       @default(now())
+  autorFoto      String?
   FeedComentario FeedComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
 
   @@unique([comentarioId, adObjectGuid])

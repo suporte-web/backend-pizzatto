@@ -331,16 +331,30 @@ export class FeedService {
     };
   }
 
-  /**
-   * =====================================================
-   * EDITAR PUBLICAÇÃO
-   * =====================================================
-   */
-  async update(id: string, body: UpdateFeedDto, user: any) {
+  async update(
+    id: string,
+    body: UpdateFeedDto,
+    arquivos: Express.Multer.File[],
+    user: any,
+  ) {
+    /**
+     * =====================================================
+     * BUSCAR PUBLICAÇÃO
+     * =====================================================
+     */
+
     const publicacao = await this.prisma.feedPublicacao.findFirst({
       where: {
         id,
         ativo: true,
+      },
+
+      include: {
+        FeedMidia: {
+          orderBy: {
+            ordem: 'asc',
+          },
+        },
       },
     });
 
@@ -348,29 +362,267 @@ export class FeedService {
       throw new NotFoundException('Publicação não encontrada.');
     }
 
+    /**
+     * =====================================================
+     * VALIDAR PERMISSÃO
+     * =====================================================
+     */
+
     if (publicacao.adObjectGuid !== user.adObjectGuid) {
       throw new ForbiddenException(
         'Você não tem permissão para editar esta publicação.',
       );
     }
 
-    const texto = body.texto?.trim();
+    /**
+     * =====================================================
+     * TEXTO
+     * =====================================================
+     */
 
-    if (!texto) {
+    const texto = body.texto?.trim() || null;
+
+    /**
+     * =====================================================
+     * NORMALIZAR MÍDIAS REMOVIDAS
+     * =====================================================
+     */
+
+    let idsMidiasRemovidas: string[] = [];
+
+    if (body.midiasRemovidas) {
+      if (Array.isArray(body.midiasRemovidas)) {
+        idsMidiasRemovidas = body.midiasRemovidas;
+      } else {
+        idsMidiasRemovidas = [body.midiasRemovidas];
+      }
+    }
+
+    /**
+     * Remove duplicidades
+     */
+    idsMidiasRemovidas = [...new Set(idsMidiasRemovidas.filter(Boolean))];
+
+    /**
+     * =====================================================
+     * VALIDAR MÍDIAS A SEREM REMOVIDAS
+     * =====================================================
+     */
+
+    const midiasExistentes = publicacao.FeedMidia;
+
+    const midiasValidasParaRemover = midiasExistentes.filter((midia) =>
+      idsMidiasRemovidas.includes(midia.id),
+    );
+
+    /**
+     * Quantas mídias continuarão
+     * depois da exclusão?
+     */
+    const quantidadeRestante =
+      midiasExistentes.length - midiasValidasParaRemover.length;
+
+    const quantidadeFinal = quantidadeRestante + (arquivos?.length || 0);
+
+    /**
+     * =====================================================
+     * PUBLICAÇÃO NÃO PODE FICAR COMPLETAMENTE VAZIA
+     * =====================================================
+     */
+
+    if (!texto && quantidadeFinal === 0) {
       throw new BadRequestException(
-        'O texto da publicação não pode ficar vazio.',
+        'A publicação deve possuir um texto, uma imagem ou um vídeo.',
       );
     }
 
-    return this.prisma.feedPublicacao.update({
+    /**
+     * =====================================================
+     * VALIDAR NOVOS ARQUIVOS
+     * =====================================================
+     */
+
+    for (const arquivo of arquivos || []) {
+      const imagem = arquivo.mimetype.startsWith('image/');
+
+      const video = arquivo.mimetype.startsWith('video/');
+
+      if (!imagem && !video) {
+        throw new BadRequestException(
+          `O arquivo "${arquivo.originalname}" não é uma imagem ou vídeo válido.`,
+        );
+      }
+    }
+
+    /**
+     * =====================================================
+     * ATUALIZAÇÃO
+     * =====================================================
+     */
+
+    await this.prisma.$transaction(async (tx) => {
+      /**
+       * -----------------------------------------
+       * 1. ATUALIZAR TEXTO
+       * -----------------------------------------
+       */
+
+      await tx.feedPublicacao.update({
+        where: {
+          id,
+        },
+
+        data: {
+          texto,
+        },
+      });
+
+      /**
+       * -----------------------------------------
+       * 2. EXCLUIR MÍDIAS REMOVIDAS
+       * -----------------------------------------
+       */
+
+      if (midiasValidasParaRemover.length > 0) {
+        await tx.feedMidia.deleteMany({
+          where: {
+            publicacaoId: id,
+
+            id: {
+              in: midiasValidasParaRemover.map((midia) => midia.id),
+            },
+          },
+        });
+      }
+
+      /**
+       * -----------------------------------------
+       * 3. BUSCAR MÍDIAS QUE RESTARAM
+       * -----------------------------------------
+       */
+
+      const midiasRestantes = await tx.feedMidia.findMany({
+        where: {
+          publicacaoId: id,
+        },
+
+        orderBy: {
+          ordem: 'asc',
+        },
+      });
+
+      /**
+       * -----------------------------------------
+       * 4. REORDENAR AS EXISTENTES
+       * -----------------------------------------
+       *
+       * Evita algo como:
+       *
+       * 0
+       * 3
+       * 5
+       *
+       * depois das exclusões.
+       */
+
+      for (let index = 0; index < midiasRestantes.length; index++) {
+        const midia = midiasRestantes[index];
+
+        if (midia.ordem !== index) {
+          await tx.feedMidia.update({
+            where: {
+              id: midia.id,
+            },
+
+            data: {
+              ordem: index,
+            },
+          });
+        }
+      }
+
+      /**
+       * -----------------------------------------
+       * 5. ADICIONAR NOVAS MÍDIAS
+       * -----------------------------------------
+       */
+
+      if (arquivos?.length) {
+        const ordemInicial = midiasRestantes.length;
+
+        await tx.feedMidia.createMany({
+          data: arquivos.map((arquivo, index) => {
+            const tipo = arquivo.mimetype.startsWith('image/')
+              ? 'IMAGEM'
+              : 'VIDEO';
+
+            return {
+              publicacaoId: id,
+
+              tipo,
+
+              url: `/downloads/feed/${arquivo.filename}`,
+
+              nomeOriginal: arquivo.originalname,
+
+              mimeType: arquivo.mimetype,
+
+              tamanho: arquivo.size,
+
+              ordem: ordemInicial + index,
+            };
+          }),
+        });
+      }
+    });
+
+    /**
+     * =====================================================
+     * RETORNAR PUBLICAÇÃO ATUALIZADA
+     * =====================================================
+     */
+
+    const publicacaoAtualizada = await this.prisma.feedPublicacao.findUnique({
       where: {
         id,
       },
 
-      data: {
-        texto,
+      include: {
+        FeedMidia: {
+          orderBy: {
+            ordem: 'asc',
+          },
+        },
+
+        _count: {
+          select: {
+            FeedCurtida: true,
+
+            FeedComentario: {
+              where: {
+                ativo: true,
+              },
+            },
+          },
+        },
       },
     });
+
+    if (!publicacaoAtualizada) {
+      throw new NotFoundException('Publicação não encontrada.');
+    }
+
+    const { FeedMidia, _count, ...resto } = publicacaoAtualizada;
+
+    return {
+      ...resto,
+
+      midias: FeedMidia,
+
+      totalCurtidas: _count.FeedCurtida,
+
+      totalComentarios: _count.FeedComentario,
+    };
   }
 
   /**
@@ -458,11 +710,13 @@ export class FeedService {
           adObjectGuid: user.adObjectGuid,
 
           usuarioNome:
-            user.nome ||
+            user.name ||
             user.displayName ||
             user.cn ||
             user.usuario ||
             'Usuário',
+
+          autorFoto: user.photo,
         },
       });
 
@@ -719,11 +973,13 @@ export class FeedService {
           adObjectGuid: user.adObjectGuid,
 
           usuarioNome:
-            user.nome ||
+            user.name ||
             user.displayName ||
             user.cn ||
             user.usuario ||
             'Usuário',
+
+          autorFoto: user.photo,
         },
       });
 
@@ -740,5 +996,17 @@ export class FeedService {
       curtido,
       totalCurtidas,
     };
+  }
+
+  async findLikesByPublicacaoId(publicacaoId: string) {
+    return await this.prisma.feedCurtida.findMany({
+      where: { publicacaoId: publicacaoId },
+    });
+  }
+
+  async findLikesByComentarioId(comentarioId: string) {
+    return await this.prisma.feedComentarioLike.findMany({
+      where: { comentarioId: comentarioId },
+    });
   }
 }

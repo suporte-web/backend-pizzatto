@@ -28,7 +28,9 @@ import { FindFeedDto } from './dtos/find-feed.dto';
 
 import { AuthGuard } from '@/auth/auth.guard';
 import { User } from '@/decorator/user.decorator';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Feed')
 @Controller('feed')
 @UseGuards(AuthGuard)
 export class FeedController {
@@ -97,27 +99,95 @@ export class FeedController {
    * nos filtros da intranet.
    */
   @Post('find-by-filter')
-  findAll(@Body() body: FindFeedDto, @Req() req: any) {
-    return this.feedService.findAll(body, req.user);
+  findAll(
+    @Body() body: FindFeedDto,
+    @User()
+    user: any,
+    y,
+  ) {
+    return this.feedService.findAll(body, user);
   }
 
   @Get(':id')
-  findById(@Param('id') id: string, @Req() req: any) {
-    return this.feedService.findById(id, req.user);
+  findById(
+    @Param('id') id: string,
+    @User()
+    user: any,
+  ) {
+    return this.feedService.findById(id, user);
   }
 
   @Patch(':id')
+  @UseInterceptors(
+    FilesInterceptor('midias', 10, {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const pasta = './downloads/feed';
+
+          mkdirSync(pasta, {
+            recursive: true,
+          });
+
+          cb(null, pasta);
+        },
+
+        filename: (req, file, cb) => {
+          const extensao = extname(file.originalname);
+
+          const nomeArquivo = `${Date.now()}-${Math.round(
+            Math.random() * 1e9,
+          )}${extensao}`;
+
+          cb(null, nomeArquivo);
+        },
+      }),
+
+      fileFilter: (req, file, cb) => {
+        const permitido =
+          file.mimetype.startsWith('image/') ||
+          file.mimetype.startsWith('video/');
+
+        if (!permitido) {
+          return cb(
+            new BadRequestException('Somente imagens e vídeos são permitidos.'),
+            false,
+          );
+        }
+
+        cb(null, true);
+      },
+
+      limits: {
+        files: 10,
+
+        // 500 MB por arquivo
+        fileSize: 500 * 1024 * 1024,
+      },
+    }),
+  )
   update(
-    @Param('id') id: string,
-    @Body() body: UpdateFeedDto,
-    @Req() req: any,
+    @Param('id')
+    id: string,
+
+    @Body()
+    body: UpdateFeedDto,
+
+    @UploadedFiles()
+    midias: Express.Multer.File[],
+
+    @User()
+    user: any,
   ) {
-    return this.feedService.update(id, body, req.user);
+    return this.feedService.update(id, body, midias || [], user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req: any) {
-    return this.feedService.remove(id, req.user);
+  remove(
+    @Param('id') id: string,
+    @User()
+    user: any,
+  ) {
+    return this.feedService.remove(id, user);
   }
 
   /**
@@ -127,8 +197,12 @@ export class FeedController {
    */
 
   @Post(':id/curtir')
-  toggleCurtida(@Param('id') publicacaoId: string, @Req() req: any) {
-    return this.feedService.toggleCurtida(publicacaoId, req.user);
+  toggleCurtida(
+    @Param('id') publicacaoId: string,
+    @User()
+    user: any,
+  ) {
+    return this.feedService.toggleCurtida(publicacaoId, user);
   }
 
   /**
@@ -145,14 +219,10 @@ export class FeedController {
     body: {
       texto: string;
     },
-
-    @Req() req: any,
+    @User()
+    user: any,
   ) {
-    return this.feedService.createComentario(
-      publicacaoId,
-      body.texto,
-      req.user,
-    );
+    return this.feedService.createComentario(publicacaoId, body.texto, user);
   }
 
   @Get(':id/comentarios')
@@ -179,31 +249,38 @@ export class FeedController {
     body: {
       texto: string;
     },
-
-    @Req() req: any,
+    @User()
+    user: any,
   ) {
-    return this.feedService.updateComentario(
-      comentarioId,
-      body.texto,
-      req.user,
-    );
+    return this.feedService.updateComentario(comentarioId, body.texto, user);
   }
 
   @Delete('comentarios/:comentarioId')
   removeComentario(
     @Param('comentarioId')
     comentarioId: string,
-
-    @Req() req: any,
+    @User()
+    user: any,
   ) {
-    return this.feedService.removeComentario(comentarioId, req.user);
+    return this.feedService.removeComentario(comentarioId, user);
   }
 
   @Post('comentarios/:comentarioId/curtir')
   toggleLikeComentario(
     @Param('comentarioId') comentarioId: string,
-    @Req() req: any,
+    @User()
+    user: any,
   ) {
-    return this.feedService.toggleLikeComentario(comentarioId, req.user);
+    return this.feedService.toggleLikeComentario(comentarioId, user);
+  }
+
+  @Get('find-likes-by-publicacao/:publicacaoId')
+  async findLikesByPublicacaoId(@Param('publicacaoId') publicacaoId: string) {
+    return await this.feedService.findLikesByPublicacaoId(publicacaoId);
+  }
+
+  @Get('find-likes-by-comentario/:comentarioId')
+  async findLikesByComentarioId(@Param('comentarioId') comentarioId: string) {
+    return await this.feedService.findLikesByComentarioId(comentarioId);
   }
 }

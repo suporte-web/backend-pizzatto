@@ -1,10 +1,10 @@
-// update-feed.dto.ts
-
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateFeedDto {
   @IsOptional()
   @IsString()
-  @MaxLength(5000)
   texto?: string;
+
+  @IsOptional()
+  midiasRemovidas?: string | string[];
 }
