@@ -2549,4 +2549,14 @@ export class GestaoDocumentosService {
       OR: permissoes,
     };
   }
+
+  async findAllAceitesByDocumentoId(documentoId: string) {
+    return await this.prisma.documentoLeitura.findMany({
+      where: { documentoId: documentoId },
+      include: {
+        Documento: true,
+        DocumentoVersao: true,
+      },
+    });
+  }
 }

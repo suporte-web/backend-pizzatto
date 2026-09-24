@@ -258,4 +258,13 @@ export class GestaoDocumentosController {
   async dashboardGestaoDocumentos(@User() user: any) {
     return this.gestaoDocumentosService.dashboardGestaoDocumentos(user);
   }
+
+  @Get(
+    'documento-aceite/visualizar/find-all-aceites-by-documentoId/:documentoId',
+  )
+  async findAllAceitesByDocumentoId(@Param('documentoId') documentoId: string) {
+    return this.gestaoDocumentosService.findAllAceitesByDocumentoId(
+      documentoId,
+    );
+  }
 }
