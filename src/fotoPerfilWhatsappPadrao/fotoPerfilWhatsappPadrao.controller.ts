@@ -11,11 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 
-import {
-  ApiConsumes,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -61,12 +57,7 @@ export class FotoPerfilWhatsappPadraoController {
     @ClientIp() ip: string,
     @User() user: any,
   ) {
-    return this.fotoPerfilWhatsappPadraoService.create(
-      body,
-      file,
-      ip,
-      user,
-    );
+    return this.fotoPerfilWhatsappPadraoService.create(body, file, ip, user);
   }
 
   @Get('find-atual')
@@ -83,18 +74,13 @@ export class FotoPerfilWhatsappPadraoController {
     summary:
       'Encontra todos os padrões de Foto de Perfil do WhatsApp já criados',
   })
-  async findByFilter(
-    @Body() body: any,
-  ) {
-    return this.fotoPerfilWhatsappPadraoService.findByFilter(
-      body,
-    );
+  async findByFilter(@Body() body: any) {
+    return this.fotoPerfilWhatsappPadraoService.findByFilter(body);
   }
 
   @Patch('update')
   @ApiOperation({
-    summary:
-      'Atualiza um padrão de Foto de Perfil do WhatsApp com base no ID',
+    summary: 'Atualiza um padrão de Foto de Perfil do WhatsApp com base no ID',
   })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
@@ -117,35 +103,29 @@ export class FotoPerfilWhatsappPadraoController {
     @UploadedFile()
     file?: Express.Multer.File,
   ) {
-    return this.fotoPerfilWhatsappPadraoService.update(
-      body,
-      file,
-    );
+    return this.fotoPerfilWhatsappPadraoService.update(body, file);
   }
 
   @Delete('delete')
   @ApiOperation({
-    summary:
-      'Deleta um padrão de Foto de Perfil do WhatsApp com base no ID',
+    summary: 'Deleta um padrão de Foto de Perfil do WhatsApp com base no ID',
   })
-  async delete(
-    @Body() body: any,
-  ) {
-    return this.fotoPerfilWhatsappPadraoService.delete(
-      body,
-    );
+  async delete(@Body() body: any) {
+    return this.fotoPerfilWhatsappPadraoService.delete(body);
   }
 
-  @Patch('change-foto-perfil-whatsapp-padrao/:id')
+  @Patch('change/:id')
   @ApiOperation({
-    summary:
-      'Define um padrão de Foto de Perfil do WhatsApp como atual',
+    summary: 'Define um padrão de Foto de Perfil do WhatsApp como atual',
   })
-  async changeFotoPerfilWhatsappPadrao(
-    @Param('id') id: string,
-  ) {
+  async changeFotoPerfilWhatsappPadrao(@Param('id') id: string) {
     return this.fotoPerfilWhatsappPadraoService.changeFotoPerfilWhatsappPadrao(
       id,
     );
+  }
+
+  @Get('find-disponiveis')
+  findDisponiveis() {
+    return this.fotoPerfilWhatsappPadraoService.findDisponiveis();
   }
 }

@@ -905,23 +905,27 @@ model FotoPerfilWhatsapp {
 }
 
 model FotoPerfilWhatsappPadrao {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  caminhoBackground String?
-  photoX            Int?
-  photoY            Int?
-  nomeX             Int?
-  nomeY             Int?
-  nomeCorFont       String?
-  nomeFontSize      String?
-  logoX             Int?
-  logoY             Int?
-  logoHeight        Int?
-  criadoPor         String?
-  isAtual           Boolean  @default(true)
-  createdAt         DateTime @default(now()) @db.Timestamp(6)
-  updatedAt         DateTime @default(now()) @db.Timestamp(6)
-  photoHeight       Int?
-  photoWidth        Int?
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caminhoBackground     String?
+  photoX                Int?
+  photoY                Int?
+  nomeX                 Int?
+  nomeY                 Int?
+  nomeCorFont           String?
+  nomeFontSize          String?
+  logoX                 Int?
+  logoY                 Int?
+  logoHeight            Int?
+  criadoPor             String?
+  isAtual               Boolean  @default(false)
+  createdAt             DateTime @default(now()) @db.Timestamp(6)
+  updatedAt             DateTime @default(now()) @db.Timestamp(6)
+  photoHeight           Int?
+  photoWidth            Int?
+  descricao             String?
+  disponivelParaEscolha Boolean  @default(true)
+  nome                  String?
+  ordem                 Int      @default(0)
 }
 
 model Licenca {
