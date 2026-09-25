@@ -31,6 +31,8 @@ import { FotoPerfilWhatsappModule } from './fotoPerfilWhatsapp/fotoPerfilWhatsap
 import { FotoPerfilWhatsappPadraoModule } from './fotoPerfilWhatsappPadrao/fotoPerfilWhatsappPadrao.module';
 import { GestaoLicencasModule } from './gestaoLicencas/gestaoLicencas.module';
 import { FeedModule } from './feed/feed.module';
+import { SaudeEmDiaModule } from './saudeEmDia/saudeEmDia.module';
+import { SegurancaEmAcaoModule } from './segurancaEmAcao/segurancaEmAcao.module';
 
 @Module({
   imports: [
@@ -63,6 +65,8 @@ import { FeedModule } from './feed/feed.module';
     FotoPerfilWhatsappPadraoModule,
     GestaoLicencasModule,
     FeedModule,
+    SaudeEmDiaModule,
+    SegurancaEmAcaoModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
