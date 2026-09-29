@@ -177,6 +177,10 @@ export class GestaoLicencasService {
     };
   }
 
+  async deleteLicenca(licenca: string) {
+    return await this.prisma.licenca.delete({ where: { id: licenca } });
+  }
+
   async createLicencaFilial(body: any, ip: string, user: any) {
     if (!body.nome || !String(body.nome).trim()) {
       throw new BadRequestException('O nome da filial é obrigatório.');

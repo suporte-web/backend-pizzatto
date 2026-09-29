@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -85,6 +86,14 @@ export class GestaoLicencasController {
     return await this.gestaoLicencasService.findLicencasByFilial(filial, user);
   }
 
+  @Delete('licenca/delete/:licenca')
+  @ApiOperation({
+    summary: 'Exclui a Licença cadastrada com base no ID',
+  })
+  async deleteLicenca(@Param('licenca') licenca: any) {
+    return await this.gestaoLicencasService.deleteLicenca(licenca);
+  }
+
   @Post('filial/create')
   @ApiOperation({
     summary: 'Cria a Filial',
@@ -102,7 +111,10 @@ export class GestaoLicencasController {
     summary: 'Encontra todas as Filiais filtrando',
   })
   async findByFilterLicencasFiliais(@Body() body: any, @User() user: any) {
-    return await this.gestaoLicencasService.findByFilterLicencasFiliais(body, user);
+    return await this.gestaoLicencasService.findByFilterLicencasFiliais(
+      body,
+      user,
+    );
   }
 
   @Get('filial/find-all')
@@ -133,7 +145,7 @@ export class GestaoLicencasController {
   async findById(@Param('id') id: string) {
     return this.gestaoLicencasService.findById(id);
   }
-  
+
   @Patch('filial/update')
   async updateFilial(@Body() body: any) {
     return this.gestaoLicencasService.updateFilial(body);
