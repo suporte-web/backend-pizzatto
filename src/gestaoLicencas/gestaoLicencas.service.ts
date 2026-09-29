@@ -54,10 +54,6 @@ export class GestaoLicencasService {
       throw new BadRequestException('A filial informada não existe.');
     }
 
-    if (!filial.ativo) {
-      throw new BadRequestException('A filial informada está inativa.');
-    }
-
     const dataPublicacao = new Date();
 
     const diasParaRevisao =
