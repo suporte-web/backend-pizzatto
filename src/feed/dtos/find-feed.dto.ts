@@ -1,6 +1,6 @@
 // find-feed.dto.ts
 
-import { IsOptional } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsInt, Min } from 'class-validator';
 
@@ -16,4 +16,8 @@ export class FindFeedDto {
   @IsInt()
   @Min(1)
   pageSize?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  hashtag?: string;
 }

@@ -8,10 +8,88 @@ import { PrismaService } from '@/prisma/prisma.service';
 import { CreateFeedDto } from './dtos/create-feed.dto';
 import { FindFeedDto } from './dtos/find-feed.dto';
 import { UpdateFeedDto } from './dtos/update-feed.dto';
+import { Prisma } from '../../generated/prisma/client';
 
 @Injectable()
 export class FeedService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private extrairHashtags(texto?: string | null): string[] {
+    if (!texto) {
+      return [];
+    }
+
+    // Remove as tags HTML do editor rico
+    const textoLimpo = texto.replace(/<[^>]*>/g, ' ');
+
+    const hashtags = textoLimpo.match(/#[\p{L}\p{N}_]+/gu) || [];
+
+    return [
+      ...new Set(
+        hashtags.map((hashtag) => hashtag.substring(1).trim()).filter(Boolean),
+      ),
+    ];
+  }
+
+  private normalizarHashtag(nome: string): string {
+    return nome
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  private async sincronizarHashtags(
+    tx: any,
+    publicacaoId: string,
+    texto?: string | null,
+  ) {
+    const hashtags = this.extrairHashtags(texto);
+
+    /**
+     * Remove os relacionamentos atuais.
+     *
+     * Não remove FeedHashtag porque ela pode estar sendo
+     * utilizada por outras publicações.
+     */
+    await tx.feedPublicacaoHashtag.deleteMany({
+      where: {
+        publicacaoId,
+      },
+    });
+
+    if (hashtags.length === 0) {
+      return;
+    }
+
+    for (const nome of hashtags) {
+      const slug = this.normalizarHashtag(nome);
+
+      if (!slug) {
+        continue;
+      }
+
+      const hashtag = await tx.feedHashtag.upsert({
+        where: {
+          slug,
+        },
+
+        update: {},
+
+        create: {
+          nome,
+          slug,
+        },
+      });
+
+      await tx.feedPublicacaoHashtag.create({
+        data: {
+          publicacaoId,
+          hashtagId: hashtag.id,
+        },
+      });
+    }
+  }
 
   async create(
     body: CreateFeedDto,
@@ -37,59 +115,86 @@ export class FeedService {
       }
     }
 
-    const publicacao = await this.prisma.feedPublicacao.create({
-      data: {
-        texto,
+    const publicacao = await this.prisma.$transaction(async (tx) => {
+      const novaPublicacao = await tx.feedPublicacao.create({
+        data: {
+          texto,
 
-        adObjectGuid: user.adObjectGuid,
+          adObjectGuid: user.adObjectGuid,
 
-        autorNome:
-          user.name || user.displayName || user.cn || user.usuario || 'Usuário',
+          autorNome:
+            user.name ||
+            user.displayName ||
+            user.cn ||
+            user.usuario ||
+            'Usuário',
 
-        autorEmail: user.mail || null,
+          autorEmail: user.mail || null,
 
-        departamento: user.department || null,
+          departamento: user.department || null,
 
-        autorFoto: user.photo,
+          autorFoto: user.photo,
 
-        FeedMidia: {
-          create: (arquivos || []).map((arquivo, index) => {
-            const tipo = arquivo.mimetype.startsWith('image/')
-              ? 'IMAGEM'
-              : 'VIDEO';
+          FeedMidia: {
+            create: (arquivos || []).map((arquivo, index) => {
+              const tipo = arquivo.mimetype.startsWith('image/')
+                ? 'IMAGEM'
+                : 'VIDEO';
 
-            return {
-              tipo,
+              return {
+                tipo,
 
-              url: `/downloads/feed/${arquivo.filename}`,
+                url: `/downloads/feed/${arquivo.filename}`,
 
-              nomeOriginal: arquivo.originalname,
+                nomeOriginal: arquivo.originalname,
 
-              mimeType: arquivo.mimetype,
+                mimeType: arquivo.mimetype,
 
-              tamanho: arquivo.size,
+                tamanho: arquivo.size,
 
-              ordem: index,
-            };
-          }),
-        },
-      },
-
-      include: {
-        FeedMidia: {
-          orderBy: {
-            ordem: 'asc',
+                ordem: index,
+              };
+            }),
           },
         },
+      });
 
-        _count: {
-          select: {
-            FeedCurtida: true,
-            FeedComentario: true,
+      /**
+       * Extrai e vincula as hashtags
+       */
+      await this.sincronizarHashtags(tx, novaPublicacao.id, texto);
+
+      return tx.feedPublicacao.findUnique({
+        where: {
+          id: novaPublicacao.id,
+        },
+
+        include: {
+          FeedMidia: {
+            orderBy: {
+              ordem: 'asc',
+            },
+          },
+
+          FeedPublicacaoHashtag: {
+            include: {
+              FeedHashtag: true,
+            },
+          },
+
+          _count: {
+            select: {
+              FeedCurtida: true,
+              FeedComentario: true,
+            },
           },
         },
-      },
+      });
     });
+
+    if (!publicacao) {
+      throw new NotFoundException('Não foi possível criar a publicação.');
+    }
 
     return {
       id: publicacao.id,
@@ -104,6 +209,10 @@ export class FeedService {
       ativo: publicacao.ativo,
 
       midias: publicacao.FeedMidia,
+
+      hashtags: publicacao.FeedPublicacaoHashtag.map(
+        (item) => item.FeedHashtag,
+      ),
 
       curtidoPorMim: false,
 
@@ -125,9 +234,23 @@ export class FeedService {
 
     const skip = (page - 1) * pageSize;
 
-    const where = {
+    const hashtag = body.hashtag?.trim();
+
+    const where: Prisma.FeedPublicacaoWhereInput = {
       ativo: true,
     };
+
+    if (hashtag) {
+      const slug = this.normalizarHashtag(hashtag.replace(/^#/, ''));
+
+      where.FeedPublicacaoHashtag = {
+        some: {
+          FeedHashtag: {
+            slug,
+          },
+        },
+      };
+    }
 
     const [publicacoes, total] = await this.prisma.$transaction([
       this.prisma.feedPublicacao.findMany({
@@ -145,6 +268,12 @@ export class FeedService {
           FeedMidia: {
             orderBy: {
               ordem: 'asc',
+            },
+          },
+
+          FeedPublicacaoHashtag: {
+            include: {
+              FeedHashtag: true,
             },
           },
 
@@ -208,8 +337,14 @@ export class FeedService {
     ]);
 
     const data = publicacoes.map((publicacao) => {
-      const { FeedCurtida, FeedComentario, FeedMidia, _count, ...resto } =
-        publicacao;
+      const {
+        FeedCurtida,
+        FeedComentario,
+        FeedMidia,
+        FeedPublicacaoHashtag,
+        _count,
+        ...resto
+      } = publicacao;
 
       const comentariosRecentes = FeedComentario.map((comentario) => {
         const {
@@ -231,6 +366,8 @@ export class FeedService {
         ...resto,
 
         midias: FeedMidia,
+
+        hashtags: FeedPublicacaoHashtag.map((item) => item.FeedHashtag),
 
         curtidoPorMim: FeedCurtida.length > 0,
 
@@ -454,19 +591,7 @@ export class FeedService {
       }
     }
 
-    /**
-     * =====================================================
-     * ATUALIZAÇÃO
-     * =====================================================
-     */
-
     await this.prisma.$transaction(async (tx) => {
-      /**
-       * -----------------------------------------
-       * 1. ATUALIZAR TEXTO
-       * -----------------------------------------
-       */
-
       await tx.feedPublicacao.update({
         where: {
           id,
@@ -477,11 +602,7 @@ export class FeedService {
         },
       });
 
-      /**
-       * -----------------------------------------
-       * 2. EXCLUIR MÍDIAS REMOVIDAS
-       * -----------------------------------------
-       */
+      await this.sincronizarHashtags(tx, id, texto);
 
       if (midiasValidasParaRemover.length > 0) {
         await tx.feedMidia.deleteMany({
@@ -495,12 +616,6 @@ export class FeedService {
         });
       }
 
-      /**
-       * -----------------------------------------
-       * 3. BUSCAR MÍDIAS QUE RESTARAM
-       * -----------------------------------------
-       */
-
       const midiasRestantes = await tx.feedMidia.findMany({
         where: {
           publicacaoId: id,
@@ -510,20 +625,6 @@ export class FeedService {
           ordem: 'asc',
         },
       });
-
-      /**
-       * -----------------------------------------
-       * 4. REORDENAR AS EXISTENTES
-       * -----------------------------------------
-       *
-       * Evita algo como:
-       *
-       * 0
-       * 3
-       * 5
-       *
-       * depois das exclusões.
-       */
 
       for (let index = 0; index < midiasRestantes.length; index++) {
         const midia = midiasRestantes[index];
@@ -540,12 +641,6 @@ export class FeedService {
           });
         }
       }
-
-      /**
-       * -----------------------------------------
-       * 5. ADICIONAR NOVAS MÍDIAS
-       * -----------------------------------------
-       */
 
       if (arquivos?.length) {
         const ordemInicial = midiasRestantes.length;
@@ -575,12 +670,6 @@ export class FeedService {
         });
       }
     });
-
-    /**
-     * =====================================================
-     * RETORNAR PUBLICAÇÃO ATUALIZADA
-     * =====================================================
-     */
 
     const publicacaoAtualizada = await this.prisma.feedPublicacao.findUnique({
       where: {
@@ -625,12 +714,6 @@ export class FeedService {
     };
   }
 
-  /**
-   * =====================================================
-   * EXCLUIR PUBLICAÇÃO
-   * Exclusão lógica
-   * =====================================================
-   */
   async remove(id: string, user: any) {
     const publicacao = await this.prisma.feedPublicacao.findFirst({
       where: {

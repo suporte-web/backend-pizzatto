@@ -1036,19 +1036,20 @@ model FeedMidia {
 }
 
 model FeedPublicacao {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  adObjectGuid   String
-  autorNome      String
-  autorEmail     String?
-  autorFoto      String?
-  departamento   String?
-  texto          String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @default(now()) @db.Timestamp(6)
-  ativo          Boolean          @default(true)
-  FeedComentario FeedComentario[]
-  FeedCurtida    FeedCurtida[]
-  FeedMidia      FeedMidia[]
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid          String
+  autorNome             String
+  autorEmail            String?
+  autorFoto             String?
+  departamento          String?
+  texto                 String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @db.Timestamp(6)
+  ativo                 Boolean                 @default(true)
+  FeedComentario        FeedComentario[]
+  FeedCurtida           FeedCurtida[]
+  FeedMidia             FeedMidia[]
+  FeedPublicacaoHashtag FeedPublicacaoHashtag[]
 
   @@index([adObjectGuid])
   @@index([createdAt])
@@ -1087,6 +1088,27 @@ model SegurancaEmAcao {
   ativo     Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @db.Timestamp(6)
+}
+
+model FeedHashtag {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome                  String                  @unique
+  slug                  String                  @unique
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @default(now()) @db.Timestamp(6)
+  FeedPublicacaoHashtag FeedPublicacaoHashtag[]
+}
+
+model FeedPublicacaoHashtag {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicacaoId   String         @db.Uuid
+  hashtagId      String         @db.Uuid
+  FeedHashtag    FeedHashtag    @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+  FeedPublicacao FeedPublicacao @relation(fields: [publicacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([publicacaoId, hashtagId])
+  @@index([hashtagId])
+  @@index([publicacaoId])
 }
 
 enum Area {
