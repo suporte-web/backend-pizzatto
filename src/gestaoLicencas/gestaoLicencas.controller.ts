@@ -105,6 +105,14 @@ export class GestaoLicencasController {
     return await this.gestaoLicencasService.findByFilterLicencasFiliais(body, user);
   }
 
+  @Get('filial/find-all')
+  @ApiOperation({
+    summary: 'Encontra todas as Filiais',
+  })
+  findAllLicencasFiliais() {
+    return this.gestaoLicencasService.findAllLicencasFiliais();
+  }
+
   @Get('filial/find-all-ativos')
   @ApiOperation({
     summary: 'Encontra todas as Filiais ativas',

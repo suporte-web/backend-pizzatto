@@ -244,6 +244,10 @@ export class GestaoLicencasService {
     return Boolean(value);
   }
 
+  async findAllLicencasFiliais() {
+    return await this.prisma.licencaFilial.findMany();
+  }
+
   async findAllLicencasFiliaisAtivos() {
     return await this.prisma.licencaFilial.findMany({
       where: { ativo: true },
