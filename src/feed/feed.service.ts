@@ -519,12 +519,33 @@ export class FeedService {
 
     const texto = body.texto?.trim() || null;
 
-    /**
-     * =====================================================
-     * NORMALIZAR MÍDIAS REMOVIDAS
-     * =====================================================
-     */
+    type OrdemMidiaDto =
+      | {
+          tipo: 'EXISTENTE';
+          id: string;
+          ordem: number;
+        }
+      | {
+          tipo: 'NOVA';
+          arquivoIndex: number;
+          ordem: number;
+        };
 
+    let ordemMidias: OrdemMidiaDto[] = [];
+
+    if (body.ordemMidias) {
+      try {
+        const parsed = JSON.parse(body.ordemMidias);
+
+        if (!Array.isArray(parsed)) {
+          throw new Error();
+        }
+
+        ordemMidias = parsed;
+      } catch {
+        throw new BadRequestException('A ordem das mídias enviada é inválida.');
+      }
+    }
     let idsMidiasRemovidas: string[] = [];
 
     if (body.midiasRemovidas) {
@@ -626,48 +647,167 @@ export class FeedService {
         },
       });
 
-      for (let index = 0; index < midiasRestantes.length; index++) {
-        const midia = midiasRestantes[index];
+      /*
+       * ==========================================
+       * QUANDO O FRONTEND ENVIA ORDEM PERSONALIZADA
+       * ==========================================
+       */
 
-        if (midia.ordem !== index) {
+      if (ordemMidias.length > 0) {
+        /*
+         * Primeiro colocamos ordens temporárias bem
+         * altas nas mídias existentes.
+         *
+         * Isso evita conflito caso exista índice
+         * unique no banco ou durante trocas
+         * como 0 -> 1 e 1 -> 0.
+         */
+        for (let index = 0; index < midiasRestantes.length; index++) {
           await tx.feedMidia.update({
             where: {
-              id: midia.id,
+              id: midiasRestantes[index].id,
             },
 
             data: {
-              ordem: index,
+              ordem: 10000 + index,
             },
           });
         }
-      }
 
-      if (arquivos?.length) {
-        const ordemInicial = midiasRestantes.length;
+        /*
+         * ==========================================
+         * PERCORRER A ORDEM FINAL
+         * ==========================================
+         */
 
-        await tx.feedMidia.createMany({
-          data: arquivos.map((arquivo, index) => {
+        for (const item of ordemMidias) {
+          const ordemFinal = Number(item.ordem) - 1;
+
+          if (!Number.isInteger(ordemFinal) || ordemFinal < 0) {
+            throw new BadRequestException(
+              'Existe uma posição de mídia inválida.',
+            );
+          }
+
+          /*
+           * MÍDIA QUE JÁ EXISTE
+           */
+          if (item.tipo === 'EXISTENTE') {
+            if (!item.id) {
+              throw new BadRequestException('Mídia existente sem ID.');
+            }
+
+            const pertenceAPublicacao = midiasRestantes.some(
+              (midia) => midia.id === item.id,
+            );
+
+            if (!pertenceAPublicacao) {
+              throw new BadRequestException(
+                'Uma das mídias informadas não pertence à publicação.',
+              );
+            }
+
+            await tx.feedMidia.update({
+              where: {
+                id: item.id,
+              },
+
+              data: {
+                ordem: ordemFinal,
+              },
+            });
+
+            continue;
+          }
+
+          /*
+           * NOVA MÍDIA
+           */
+          if (item.tipo === 'NOVA') {
+            const arquivo = arquivos?.[item.arquivoIndex];
+
+            if (!arquivo) {
+              throw new BadRequestException(
+                `Arquivo da posição ${item.ordem} não encontrado.`,
+              );
+            }
+
             const tipo = arquivo.mimetype.startsWith('image/')
               ? 'IMAGEM'
               : 'VIDEO';
 
-            return {
-              publicacaoId: id,
+            await tx.feedMidia.create({
+              data: {
+                publicacaoId: id,
 
-              tipo,
+                tipo,
 
-              url: `/downloads/feed/${arquivo.filename}`,
+                url: `/downloads/feed/${arquivo.filename}`,
 
-              nomeOriginal: arquivo.originalname,
+                nomeOriginal: arquivo.originalname,
 
-              mimeType: arquivo.mimetype,
+                mimeType: arquivo.mimetype,
 
-              tamanho: arquivo.size,
+                tamanho: arquivo.size,
 
-              ordem: ordemInicial + index,
-            };
-          }),
-        });
+                ordem: ordemFinal,
+              },
+            });
+          }
+        }
+      } else {
+
+      /*
+       * ==========================================
+       * FALLBACK
+       *
+       * Caso algum frontend antigo não envie
+       * ordemMidias, mantém o comportamento anterior.
+       * ==========================================
+       */
+        for (let index = 0; index < midiasRestantes.length; index++) {
+          const midia = midiasRestantes[index];
+
+          if (midia.ordem !== index) {
+            await tx.feedMidia.update({
+              where: {
+                id: midia.id,
+              },
+
+              data: {
+                ordem: index,
+              },
+            });
+          }
+        }
+
+        if (arquivos?.length) {
+          const ordemInicial = midiasRestantes.length;
+
+          await tx.feedMidia.createMany({
+            data: arquivos.map((arquivo, index) => {
+              const tipo = arquivo.mimetype.startsWith('image/')
+                ? 'IMAGEM'
+                : 'VIDEO';
+
+              return {
+                publicacaoId: id,
+
+                tipo,
+
+                url: `/downloads/feed/${arquivo.filename}`,
+
+                nomeOriginal: arquivo.originalname,
+
+                mimeType: arquivo.mimetype,
+
+                tamanho: arquivo.size,
+
+                ordem: ordemInicial + index,
+              };
+            }),
+          });
+        }
       }
     });
 

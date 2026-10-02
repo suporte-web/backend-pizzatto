@@ -26,6 +26,7 @@
     "prisma:reset": "npm run prisma:build && prisma migrate reset"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
