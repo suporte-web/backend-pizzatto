@@ -759,17 +759,18 @@ model MuralImagem {
 }
 
 model CnpjConsulta {
-  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  cnpj                 String
-  consultadoEm         DateTime              @default(now()) @db.Timestamp(6)
-  pontuacao            Int                   @default(0)
-  resultado            ResultadoHomologacao  @default(ANALISE_MANUAL)
-  observacao           String?
-  createdAt            DateTime              @default(now()) @db.Timestamp(6)
-  updatedAt            DateTime              @default(now()) @db.Timestamp(6)
-  classificacao        String?
-  CnpjCertidao         CnpjCertidao[]
-  CnpjDadosConsultados CnpjDadosConsultados?
+  id                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cnpj                       String
+  consultadoEm               DateTime              @default(now()) @db.Timestamp(6)
+  pontuacao                  Int                   @default(0)
+  resultado                  ResultadoHomologacao  @default(ANALISE_MANUAL)
+  observacao                 String?
+  createdAt                  DateTime              @default(now()) @db.Timestamp(6)
+  updatedAt                  DateTime              @default(now()) @db.Timestamp(6)
+  classificacao              String?
+  avaliacaoCertidoesFederais String?
+  CnpjCertidao               CnpjCertidao[]
+  CnpjDadosConsultados       CnpjDadosConsultados?
 
   @@index([cnpj])
   @@index([consultadoEm])

@@ -184,12 +184,12 @@ export class CnpjConsultaService {
 
   private validarTipoCertidao(
     tipo: unknown,
-  ): 'FEDERAL' | 'ESTADUAL' | 'MUNICIPAL' {
+  ): 'FEDERAL' | 'ESTADUAL' | 'MUNICIPAL' | 'OUTRA' {
     const valor = String(tipo ?? '')
       .trim()
       .toUpperCase();
 
-    const permitidos = ['FEDERAL', 'ESTADUAL', 'MUNICIPAL'] as const;
+    const permitidos = ['FEDERAL', 'ESTADUAL', 'MUNICIPAL', 'OUTRA'] as const;
 
     if (!permitidos.includes(valor as any)) {
       throw new BadRequestException('O tipo da certidão informado é inválido.');
@@ -2212,11 +2212,18 @@ export class CnpjConsultaService {
   async update(id: string, body: any) {
     const consultaAtual = await this.findById(id);
 
-    const { pontuacao, resultado, observacao, dados } = body;
+    const {
+      pontuacao,
+      resultado,
+      avaliacaoCertidoesFederais,
+      observacao,
+      dados,
+    } = body;
 
     if (
       pontuacao === undefined &&
       resultado === undefined &&
+      avaliacaoCertidoesFederais === undefined &&
       observacao === undefined &&
       dados === undefined
     ) {
@@ -2238,6 +2245,10 @@ export class CnpjConsultaService {
 
             ...(resultado !== undefined && {
               resultado,
+            }),
+
+            ...(avaliacaoCertidoesFederais !== undefined && {
+              avaliacaoCertidoesFederais,
             }),
 
             ...(observacao !== undefined && {
@@ -2496,30 +2507,63 @@ export class CnpjConsultaService {
 
   async visualizarCertidao(id: string, res: Response) {
     const certidao = await this.prisma.cnpjCertidao.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
     });
 
     if (!certidao) {
-      throw new NotFoundException('Certidão não encontrada.');
+      throw new NotFoundException('Arquivo não encontrado.');
     }
 
     if (!certidao.caminho) {
-      throw new NotFoundException('Arquivo da certidão não encontrado.');
+      throw new NotFoundException('Caminho físico do arquivo não encontrado.');
     }
 
     if (!fs.existsSync(certidao.caminho)) {
-      throw new NotFoundException('Arquivo físico da certidão não encontrado.');
+      throw new NotFoundException('Arquivo físico não encontrado.');
     }
 
-    res.setHeader('Content-Type', certidao.mimeType || 'application/pdf');
+    const nomeOriginal =
+      certidao.nomeOriginal || certidao.nomeSalvo || 'arquivo';
+
+    const mimeType = certidao.mimeType || 'application/octet-stream';
+
+    res.setHeader('Content-Type', mimeType);
 
     res.setHeader(
       'Content-Disposition',
-      `inline; filename="${encodeURIComponent(
-        certidao.nomeOriginal || 'certidao.pdf',
-      )}"`,
+      `inline; filename*=UTF-8''${encodeURIComponent(nomeOriginal)}`,
     );
 
     return res.sendFile(path.resolve(certidao.caminho));
+  }
+
+  async findAllAvaliacoesCertidoesFederais() {
+    const registros = await this.prisma.cnpjConsulta.findMany({
+      where: {
+        avaliacaoCertidoesFederais: {
+          not: null,
+        },
+      },
+      select: {
+        avaliacaoCertidoesFederais: true,
+      },
+    });
+
+    const avaliacoes = registros
+      .map((item) => item.avaliacaoCertidoesFederais?.trim())
+      .filter((item): item is string => Boolean(item));
+
+    const avaliacoesSemDuplicidade = Array.from(
+      new Map(
+        avaliacoes.map((avaliacao) => [
+          avaliacao.toLocaleLowerCase('pt-BR'),
+          avaliacao,
+        ]),
+      ).values(),
+    );
+
+    return avaliacoesSemDuplicidade.sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }
 }

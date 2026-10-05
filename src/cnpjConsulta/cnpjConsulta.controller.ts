@@ -55,7 +55,7 @@ export class CnpjConsultaController {
         },
 
         filename: (_request, file, callback) => {
-          const extensao = extname(file.originalname).toLowerCase() || '.pdf';
+          const extensao = extname(file.originalname).toLowerCase();
 
           callback(null, `${randomUUID()}${extensao}`);
         },
@@ -64,21 +64,6 @@ export class CnpjConsultaController {
       limits: {
         fileSize: 10 * 1024 * 1024,
         files: 10,
-      },
-
-      fileFilter: (_request, file, callback) => {
-        const ehPdf =
-          file.mimetype === 'application/pdf' &&
-          extname(file.originalname).toLowerCase() === '.pdf';
-
-        if (!ehPdf) {
-          return callback(
-            new BadRequestException('Somente arquivos PDF são permitidos.'),
-            false,
-          );
-        }
-
-        callback(null, true);
       },
     }),
   )
@@ -131,10 +116,12 @@ export class CnpjConsultaController {
   }
 
   @Get('certidoes/:id/arquivo')
-  async visualizarCertidao(
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async visualizarCertidao(@Param('id') id: string, @Res() res: Response) {
     return this.cnpjConsultaService.visualizarCertidao(id, res);
+  }
+
+  @Get('find-all-avaliacoes-certidoes-federais')
+  async findAllAvaliacoesCertidoesFederais() {
+    return this.cnpjConsultaService.findAllAvaliacoesCertidoesFederais();
   }
 }
