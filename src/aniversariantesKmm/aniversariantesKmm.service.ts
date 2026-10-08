@@ -1012,16 +1012,17 @@ export class AniversariantesKmmService {
 
       nomesProcessados.add(nomeNormalizado);
 
-      const dataAdmissao = converterDataBr(
-        String(registro['Data Admissao'] || ''),
-      );
+      const dataAdmissao = converterDataBr(registro['Data Admissao']);
 
-      const dataNascimento = converterDataBr(
-        String(registro['Data Nascimento'] || ''),
-      );
+      const dataNascimento = converterDataBr(registro['Data Nascimento']);
 
       if (!dataAdmissao || !dataNascimento) {
-        invalidos.push(nomeOriginal);
+        invalidos.push(
+          `${nomeOriginal} - Admissão: ${String(
+            registro['Data Admissao'] ?? '',
+          )} | Nascimento: ${String(registro['Data Nascimento'] ?? '')}`,
+        );
+
         continue;
       }
 
