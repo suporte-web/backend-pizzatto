@@ -157,6 +157,7 @@ export class AniversariantesKmmService {
 
   async sincronizarDatasUsuarioChat() {
     const funcionarios = await this.findAniversarioAndAdmissao();
+
     const usuariosChat = await this.prisma.usuarioChat.findMany({
       select: {
         id: true,
@@ -169,9 +170,12 @@ export class AniversariantesKmmService {
     });
 
     const usuariosPorNome = new Map<string, typeof usuariosChat>();
+
     for (const usuario of usuariosChat) {
       const nome = this.normalizarNome(usuario.nome);
+
       if (!nome) continue;
+
       const grupo = usuariosPorNome.get(nome) ?? [];
       grupo.push(usuario);
       usuariosPorNome.set(nome, grupo);
@@ -180,6 +184,7 @@ export class AniversariantesKmmService {
     let totalUsuariosAtualizados = 0;
     let totalUsuariosAmbiguos = 0;
     let totalUsuariosNaoEncontrados = 0;
+
     const hoje = this.inicioDoDiaUtc(new Date());
 
     for (const funcionario of funcionarios) {
@@ -190,18 +195,40 @@ export class AniversariantesKmmService {
         totalUsuariosNaoEncontrados++;
         continue;
       }
-      if (encontrados.length !== 1) {
-        totalUsuariosAmbiguos++;
-        this.logger.warn(
-          `Sincronização ignorada: ${encontrados.length} usuários com nome '${nome}' no UsuarioChat.`,
-        );
-        continue;
-      }
 
-      const usuarioChat = encontrados[0];
       const dataNascimento = this.converterData(funcionario.DATA_NASCIMENTO);
+
       const dataAdmissao = this.converterData(funcionario.DATA_ADMISSAO);
+
       const dataDemissao = this.converterData(funcionario.DATA_DEMISSAO);
+
+      let usuarioChat: (typeof usuariosChat)[number] | undefined;
+
+      if (encontrados.length === 1) {
+        usuarioChat = encontrados[0];
+      } else {
+        // Em caso de múltiplas contas, somente sincroniza
+        // quando uma delas corresponde exatamente à admissão
+        // mais recente informada pelo KMM.
+        const correspondentes = encontrados.filter(
+          (usuario) =>
+            dataAdmissao &&
+            usuario.dataAdmissao?.getTime() === dataAdmissao.getTime(),
+        );
+
+        if (correspondentes.length === 1) {
+          usuarioChat = correspondentes[0];
+        } else {
+          totalUsuariosAmbiguos++;
+
+          this.logger.warn(
+            `Sincronização ignorada: ${encontrados.length} contas ` +
+              `para '${nome}', sem correspondência única da admissão.`,
+          );
+
+          continue;
+        }
+      }
 
       const dataUpdate: {
         dataNascimento?: Date;
@@ -214,7 +241,6 @@ export class AniversariantesKmmService {
         dataUpdate.dataNascimento = dataNascimento;
       }
 
-      // Um vínculo mais recente substitui a admissão anterior.
       if (
         dataAdmissao &&
         (!usuarioChat.dataAdmissao ||
@@ -223,37 +249,49 @@ export class AniversariantesKmmService {
         dataUpdate.dataAdmissao = dataAdmissao;
       }
 
-      // Somente a demissão do vínculo mais recente é considerada.
       if (dataDemissao) {
         if (usuarioChat.dataDemissao?.getTime() !== dataDemissao.getTime()) {
           dataUpdate.dataDemissao = dataDemissao;
         }
+
         if (dataDemissao.getTime() <= hoje.getTime() && usuarioChat.ativo) {
           dataUpdate.ativo = false;
         }
       } else if (dataAdmissao) {
-        // Readmissão confirmada por admissão mais recente no KMM.
-        const houveReadmissao =
-          !!usuarioChat.dataDemissao &&
-          dataAdmissao.getTime() > usuarioChat.dataDemissao.getTime();
-
-        if (usuarioChat.dataDemissao) {
+        // O vínculo selecionado pelo KMM não tem demissão.
+        // Remove a demissão antiga da conta correspondente.
+        if (usuarioChat.dataDemissao !== null) {
           dataUpdate.dataDemissao = null;
         }
-        // Não reativa usuários sem evidência de readmissão: podem ter
-        // sido desativados por uma razão diferente de desligamento.
-        if (houveReadmissao && !usuarioChat.ativo) {
+
+        // Para contas duplicadas, a correspondência exata
+        // da admissão identifica a conta a ser reativada.
+        const readmissaoConfirmada =
+          encontrados.length > 1 ||
+          (!!usuarioChat.dataDemissao &&
+            dataAdmissao.getTime() > usuarioChat.dataDemissao.getTime());
+
+        if (readmissaoConfirmada && !usuarioChat.ativo) {
           dataUpdate.ativo = true;
         }
       }
 
-      if (!Object.keys(dataUpdate).length) continue;
+      if (!Object.keys(dataUpdate).length) {
+        continue;
+      }
 
       await this.prisma.usuarioChat.update({
-        where: { id: usuarioChat.id },
+        where: {
+          id: usuarioChat.id,
+        },
         data: dataUpdate,
       });
+
       totalUsuariosAtualizados++;
+
+      this.logger.log(
+        `Usuário sincronizado: ${usuarioChat.nome} (${usuarioChat.id})`,
+      );
     }
 
     return {
