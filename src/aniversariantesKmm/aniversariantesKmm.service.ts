@@ -868,39 +868,104 @@ export class AniversariantesKmmService {
 
     const registros = XLSX.utils.sheet_to_json<{
       Nome?: string;
-      'Data Admissao'?: string;
-      'Data Nascimento'?: string;
+      'Data Admissao'?: string | number | Date;
+      'Data Nascimento'?: string | number | Date;
     }>(worksheet, {
       defval: '',
-      raw: false,
+      raw: true,
     });
 
     if (!registros.length) {
       throw new BadRequestException('A planilha está vazia.');
     }
 
-    const converterDataBr = (valor: string): Date | null => {
-      const texto = String(valor || '').trim();
-
-      const match = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-
-      if (!match) return null;
-
-      const [, dia, mes, ano] = match;
-
-      const data = new Date(
-        Date.UTC(Number(ano), Number(mes) - 1, Number(dia)),
-      );
-
-      if (
-        data.getUTCFullYear() !== Number(ano) ||
-        data.getUTCMonth() !== Number(mes) - 1 ||
-        data.getUTCDate() !== Number(dia)
-      ) {
+    const converterDataBr = (
+      valor: string | number | Date | null | undefined,
+    ): Date | null => {
+      if (valor === null || valor === undefined || valor === '') {
         return null;
       }
 
-      return data;
+      // Data já convertida para objeto Date
+      if (valor instanceof Date) {
+        if (Number.isNaN(valor.getTime())) return null;
+
+        return new Date(
+          Date.UTC(
+            valor.getUTCFullYear(),
+            valor.getUTCMonth(),
+            valor.getUTCDate(),
+          ),
+        );
+      }
+
+      // Data numérica do Excel
+      if (typeof valor === 'number') {
+        const dataExcel = XLSX.SSF.parse_date_code(valor);
+
+        if (!dataExcel) return null;
+
+        const data = new Date(
+          Date.UTC(dataExcel.y, dataExcel.m - 1, dataExcel.d),
+        );
+
+        return Number.isNaN(data.getTime()) ? null : data;
+      }
+
+      const texto = String(valor).trim();
+
+      // DD/MM/AAAA ou DD/MM/AA
+      const formatoBr = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+
+      if (formatoBr) {
+        const [, dia, mes, anoTexto] = formatoBr;
+
+        let ano = Number(anoTexto);
+
+        if (anoTexto.length === 2) {
+          ano += ano >= 50 ? 1900 : 2000;
+        }
+
+        const data = new Date(Date.UTC(ano, Number(mes) - 1, Number(dia)));
+
+        if (
+          data.getUTCFullYear() !== ano ||
+          data.getUTCMonth() !== Number(mes) - 1 ||
+          data.getUTCDate() !== Number(dia)
+        ) {
+          return null;
+        }
+
+        return data;
+      }
+
+      // AAAA-MM-DD
+      const formatoIso = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+      if (formatoIso) {
+        const [, ano, mes, dia] = formatoIso;
+
+        const data = new Date(
+          Date.UTC(Number(ano), Number(mes) - 1, Number(dia)),
+        );
+
+        if (
+          data.getUTCFullYear() !== Number(ano) ||
+          data.getUTCMonth() !== Number(mes) - 1 ||
+          data.getUTCDate() !== Number(dia)
+        ) {
+          return null;
+        }
+
+        return data;
+      }
+
+      // Número serial do Excel recebido como string
+      if (/^\d{5}(?:\.\d+)?$/.test(texto)) {
+        return converterDataBr(Number(texto));
+      }
+
+      return null;
     };
 
     const usuariosChat = await this.prisma.usuarioChat.findMany({
