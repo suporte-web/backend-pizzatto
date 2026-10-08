@@ -2,14 +2,17 @@ import { KmmDatabaseService } from '@/database/kmm/kmm-database.service';
 
 import { PrismaService } from '@/prisma/prisma.service';
 
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 
 import * as XLSX from 'xlsx';
 
 @Injectable()
 export class AniversariantesKmmService {
+  private readonly logger = new Logger(AniversariantesKmmService.name);
+
   constructor(
     private readonly prisma: PrismaService,
+
     private readonly kmmDatabaseService: KmmDatabaseService,
   ) {}
 
@@ -21,6 +24,7 @@ export class AniversariantesKmmService {
     const data = String(dataNascimento).trim();
 
     // YYYY-MM-DD
+
     const formatoIso = /^(\d{4})-(\d{2})-(\d{2})$/;
 
     const matchIso = data.match(formatoIso);
@@ -30,6 +34,7 @@ export class AniversariantesKmmService {
     }
 
     // DD/MM/YYYY
+
     const formatoBr = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 
     const matchBr = data.match(formatoBr);
@@ -39,6 +44,7 @@ export class AniversariantesKmmService {
     }
 
     // DD/MM
+
     const formatoSemAno = /^(\d{2})\/(\d{2})$/;
 
     const matchSemAno = data.match(formatoSemAno);
@@ -58,6 +64,7 @@ export class AniversariantesKmmService {
     const data = String(dataNascimento).trim();
 
     // YYYY-MM-DD
+
     const formatoIso = /^(\d{4})-(\d{2})-(\d{2})$/;
 
     const matchIso = data.match(formatoIso);
@@ -67,6 +74,7 @@ export class AniversariantesKmmService {
     }
 
     // DD/MM/YYYY
+
     const formatoBr = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 
     const matchBr = data.match(formatoBr);
@@ -76,6 +84,7 @@ export class AniversariantesKmmService {
     }
 
     // DD/MM
+
     const formatoSemAno = /^(\d{2})\/(\d{2})$/;
 
     const matchSemAno = data.match(formatoSemAno);
@@ -95,11 +104,13 @@ export class AniversariantesKmmService {
     const data = String(dataNascimento).trim();
 
     // Já está YYYY-MM-DD
+
     if (/^\d{4}-\d{2}-\d{2}$/.test(data)) {
       return data;
     }
 
     // DD/MM/YYYY
+
     const matchBr = data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
 
     if (matchBr) {
@@ -114,9 +125,13 @@ export class AniversariantesKmmService {
   private normalizarNome(valor: string): string {
     return String(valor || '')
       .trim()
+
       .toUpperCase()
+
       .normalize('NFD')
+
       .replace(/[\u0300-\u036f]/g, '')
+
       .replace(/\s+/g, ' ');
   }
 
@@ -142,14 +157,6 @@ export class AniversariantesKmmService {
 
   async sincronizarDatasUsuarioChat() {
     const funcionarios = await this.findAniversarioAndAdmissao();
-
-    if (!funcionarios?.length) {
-      return {
-        totalFuncionariosKmm: 0,
-        totalUsuariosAtualizados: 0,
-      };
-    }
-
     const usuariosChat = await this.prisma.usuarioChat.findMany({
       select: {
         id: true,
@@ -161,86 +168,99 @@ export class AniversariantesKmmService {
       },
     });
 
-    if (!usuariosChat.length) {
-      return {
-        totalFuncionariosKmm: funcionarios.length,
-        totalUsuariosAtualizados: 0,
-      };
+    const usuariosPorNome = new Map<string, typeof usuariosChat>();
+    for (const usuario of usuariosChat) {
+      const nome = this.normalizarNome(usuario.nome);
+      if (!nome) continue;
+      const grupo = usuariosPorNome.get(nome) ?? [];
+      grupo.push(usuario);
+      usuariosPorNome.set(nome, grupo);
     }
 
-    const usuariosPorNome = new Map(
-      usuariosChat.map((usuario) => [
-        this.normalizarNome(usuario.nome),
-        usuario,
-      ]),
-    );
-
-    const updates: Promise<any>[] = [];
+    let totalUsuariosAtualizados = 0;
+    let totalUsuariosAmbiguos = 0;
+    let totalUsuariosNaoEncontrados = 0;
+    const hoje = this.inicioDoDiaUtc(new Date());
 
     for (const funcionario of funcionarios) {
-      const nomeNormalizado = this.normalizarNome(funcionario.NOME);
+      const nome = this.normalizarNome(funcionario.NOME);
+      const encontrados = usuariosPorNome.get(nome) ?? [];
 
-      const usuarioChat = usuariosPorNome.get(nomeNormalizado);
-
-      if (!usuarioChat) {
+      if (!encontrados.length) {
+        totalUsuariosNaoEncontrados++;
+        continue;
+      }
+      if (encontrados.length !== 1) {
+        totalUsuariosAmbiguos++;
+        this.logger.warn(
+          `Sincronização ignorada: ${encontrados.length} usuários com nome '${nome}' no UsuarioChat.`,
+        );
         continue;
       }
 
+      const usuarioChat = encontrados[0];
       const dataNascimento = this.converterData(funcionario.DATA_NASCIMENTO);
-
       const dataAdmissao = this.converterData(funcionario.DATA_ADMISSAO);
-
       const dataDemissao = this.converterData(funcionario.DATA_DEMISSAO);
 
       const dataUpdate: {
         dataNascimento?: Date;
         dataAdmissao?: Date;
-        dataDemissao?: Date;
+        dataDemissao?: Date | null;
         ativo?: boolean;
       } = {};
 
-      // Preenche nascimento somente se ainda estiver vazio
       if (!usuarioChat.dataNascimento && dataNascimento) {
         dataUpdate.dataNascimento = dataNascimento;
       }
 
-      // Preenche admissão somente se ainda estiver vazio
-      if (!usuarioChat.dataAdmissao && dataAdmissao) {
+      // Um vínculo mais recente substitui a admissão anterior.
+      if (
+        dataAdmissao &&
+        (!usuarioChat.dataAdmissao ||
+          dataAdmissao.getTime() > usuarioChat.dataAdmissao.getTime())
+      ) {
         dataUpdate.dataAdmissao = dataAdmissao;
       }
 
-      // Se houver demissão no KMM
+      // Somente a demissão do vínculo mais recente é considerada.
       if (dataDemissao) {
-        if (!usuarioChat.dataDemissao) {
+        if (usuarioChat.dataDemissao?.getTime() !== dataDemissao.getTime()) {
           dataUpdate.dataDemissao = dataDemissao;
         }
-
-        if (usuarioChat.ativo) {
+        if (dataDemissao.getTime() <= hoje.getTime() && usuarioChat.ativo) {
           dataUpdate.ativo = false;
+        }
+      } else if (dataAdmissao) {
+        // Readmissão confirmada por admissão mais recente no KMM.
+        const houveReadmissao =
+          !!usuarioChat.dataDemissao &&
+          dataAdmissao.getTime() > usuarioChat.dataDemissao.getTime();
+
+        if (usuarioChat.dataDemissao) {
+          dataUpdate.dataDemissao = null;
+        }
+        // Não reativa usuários sem evidência de readmissão: podem ter
+        // sido desativados por uma razão diferente de desligamento.
+        if (houveReadmissao && !usuarioChat.ativo) {
+          dataUpdate.ativo = true;
         }
       }
 
-      if (Object.keys(dataUpdate).length === 0) {
-        continue;
-      }
+      if (!Object.keys(dataUpdate).length) continue;
 
-      updates.push(
-        this.prisma.usuarioChat.update({
-          where: {
-            id: usuarioChat.id,
-          },
-          data: dataUpdate,
-        }),
-      );
-    }
-
-    if (updates.length > 0) {
-      await Promise.all(updates);
+      await this.prisma.usuarioChat.update({
+        where: { id: usuarioChat.id },
+        data: dataUpdate,
+      });
+      totalUsuariosAtualizados++;
     }
 
     return {
       totalFuncionariosKmm: funcionarios.length,
-      totalUsuariosAtualizados: updates.length,
+      totalUsuariosAtualizados,
+      totalUsuariosAmbiguos,
+      totalUsuariosNaoEncontrados,
     };
   }
 
@@ -263,8 +283,11 @@ export class AniversariantesKmmService {
 
     const colunasPermitidas: Record<string, string> = {
       NOME: '"NOME"',
+
       DATA_NASCIMENTO: `EXTRACT(DAY FROM "DATA_NASCIMENTO_ORIGINAL")`,
+
       MODALIDADE: '"MODALIDADE"',
+
       SITUACAO: '"SITUACAO"',
     };
 
@@ -273,15 +296,23 @@ export class AniversariantesKmmService {
       `EXTRACT(DAY FROM "DATA_NASCIMENTO_ORIGINAL")`;
 
     const sql = `
+
     WITH aniversariantes AS (
+
       SELECT
+
         P."COD_PESSOA",
+
         PF."NOME",
+
         PF."DATA_NASCIMENTO" AS "DATA_NASCIMENTO_ORIGINAL",
 
         TO_CHAR(
+
           PF."DATA_NASCIMENTO",
+
           'YYYY-MM-DD'
+
         ) AS "DATA_NASCIMENTO",
 
         M."DESCRICAO" AS "MODALIDADE",
@@ -293,28 +324,37 @@ export class AniversariantesKmmService {
         P."DATE_INSERT",
 
         ROW_NUMBER() OVER (
+
           PARTITION BY PF."NOME"
+
           ORDER BY P."DATE_INSERT" DESC
+
         ) AS rn
 
       FROM KSS.PESSOA P
 
       INNER JOIN KSS.PESSOA_FISICA PF
+
         ON PF."COD_PESSOA" = P."COD_PESSOA"
 
       INNER JOIN KSS.PESSOA_MODALIDADE PM
+
         ON PM."COD_PESSOA" = P."COD_PESSOA"
 
       INNER JOIN KSS.MODALIDADE M
+
         ON M."NUM_MODALIDADE" = PM."NUM_MODALIDADE"
 
       INNER JOIN KSS.PESSOA_MODALIDADE_SITUACAO PMS
+
         ON PMS."SITUACAO" = PM."SITUACAO"
 
       INNER JOIN KSS.FUNCIONARIO_MATR_HISTORICO FMH
+
         ON FMH."COD_PESSOA" = P."COD_PESSOA"
 
       INNER JOIN FOLHA.FUNCIONARIO_DADOS FD
+
         ON FD."COD_PESSOA" = P."COD_PESSOA"
 
       WHERE M."NUM_MODALIDADE" = 4
@@ -322,21 +362,33 @@ export class AniversariantesKmmService {
         AND PMS."DESCRICAO" = 'Ativo'
 
         AND EXTRACT(
+
           MONTH FROM PF."DATA_NASCIMENTO"
+
         ) = $1
 
         AND (
+
           $2::TEXT IS NULL
+
           OR PF."NOME" ILIKE '%' || $2 || '%'
+
         )
+
     )
 
     SELECT
+
       "COD_PESSOA",
+
       "NOME",
+
       "DATA_NASCIMENTO",
+
       "MODALIDADE",
+
       "SITUACAO",
+
       "FILIAL"
 
     FROM aniversariantes
@@ -344,10 +396,12 @@ export class AniversariantesKmmService {
     WHERE rn = 1
 
     ORDER BY ${colunaOrdenacao} ${ordem};
+
   `;
 
     const resultKmm = await this.kmmDatabaseService.query(sql, [
       mesNumero,
+
       nome,
     ]);
 
@@ -355,6 +409,7 @@ export class AniversariantesKmmService {
       ...item,
 
       TIPO: 'COLABORADOR',
+
       ORIGEM: 'KMM',
     }));
 
@@ -373,6 +428,7 @@ export class AniversariantesKmmService {
             ? {
                 nome: {
                   contains: nome,
+
                   mode: 'insensitive',
                 },
               }
@@ -382,11 +438,13 @@ export class AniversariantesKmmService {
     );
 
     const aniversariantesPj = aniversariantesPjBanco
+
       .filter((item) => {
         const mes = this.extrairMesDataNascimento(item.dataNascimento);
 
         return mes === mesNumero;
       })
+
       .map((item) => ({
         COD_PESSOA: item.id,
 
@@ -410,9 +468,13 @@ export class AniversariantesKmmService {
     const normalizarNome = (valor: string) =>
       String(valor || '')
         .trim()
+
         .toUpperCase()
+
         .normalize('NFD')
+
         .replace(/[\u0300-\u036f]/g, '')
+
         .replace(/\s+/g, ' ');
 
     const nomesKmm = new Set(
@@ -425,6 +487,7 @@ export class AniversariantesKmmService {
 
     const aniversariantes = [
       ...aniversariantesKmm,
+
       ...aniversariantesPjSemDuplicados,
     ];
 
@@ -440,7 +503,9 @@ export class AniversariantesKmmService {
       } else if (ordenarPorRecebido === 'NOME') {
         comparacao = String(a.NOME || '').localeCompare(
           String(b.NOME || ''),
+
           'pt-BR',
+
           {
             sensitivity: 'base',
           },
@@ -448,7 +513,9 @@ export class AniversariantesKmmService {
       } else if (ordenarPorRecebido === 'MODALIDADE') {
         comparacao = String(a.MODALIDADE || '').localeCompare(
           String(b.MODALIDADE || ''),
+
           'pt-BR',
+
           {
             sensitivity: 'base',
           },
@@ -456,7 +523,9 @@ export class AniversariantesKmmService {
       } else if (ordenarPorRecebido === 'SITUACAO') {
         comparacao = String(a.SITUACAO || '').localeCompare(
           String(b.SITUACAO || ''),
+
           'pt-BR',
+
           {
             sensitivity: 'base',
           },
@@ -471,11 +540,15 @@ export class AniversariantesKmmService {
 
   async createAniversariantesPj(body: {
     nome: string;
+
     dataNascimento: string;
+
     filial: string;
   }) {
     const nome = body.nome?.trim();
+
     const dataNascimento = body.dataNascimento?.trim();
+
     const filial = body.filial?.trim().toUpperCase();
 
     if (!nome || !dataNascimento || !filial) {
@@ -488,11 +561,15 @@ export class AniversariantesKmmService {
       where: {
         nome: {
           equals: nome,
+
           mode: 'insensitive',
         },
+
         dataNascimento,
+
         filial: {
           equals: filial,
+
           mode: 'insensitive',
         },
       },
@@ -507,7 +584,9 @@ export class AniversariantesKmmService {
     return await this.prisma.aniversariantesPj.create({
       data: {
         nome,
+
         dataNascimento,
+
         filial,
       },
     });
@@ -528,6 +607,7 @@ export class AniversariantesKmmService {
 
     const workbook = XLSX.read(file.buffer, {
       type: 'buffer',
+
       cellDates: false,
     });
 
@@ -541,10 +621,13 @@ export class AniversariantesKmmService {
 
     const dados = XLSX.utils.sheet_to_json<{
       nome?: string;
+
       dataNascimento?: string;
+
       filial?: string;
     }>(worksheet, {
       defval: '',
+
       raw: false,
     });
 
@@ -553,6 +636,7 @@ export class AniversariantesKmmService {
     }
 
     const registros = dados
+
       .map((item) => ({
         nome: String(item.nome || '').trim(),
 
@@ -560,8 +644,10 @@ export class AniversariantesKmmService {
 
         filial: String(item.filial || '')
           .toUpperCase()
+
           .trim(),
       }))
+
       .filter((item) => item.nome && item.dataNascimento && item.filial);
 
     if (!registros.length) {
@@ -576,16 +662,21 @@ export class AniversariantesKmmService {
 
     return {
       mensagem: 'Planilha importada com sucesso.',
+
       quantidadeImportada: resultado.count,
     };
   }
 
   async updateAniversariantesPj(
     id: string,
+
     body: {
       nome: string;
+
       dataNascimento: string;
+
       filial: string;
+
       ativo: boolean;
     },
   ) {
@@ -594,8 +685,11 @@ export class AniversariantesKmmService {
     }
 
     const nome = body.nome?.trim();
+
     const dataNascimento = body.dataNascimento?.trim();
+
     const filial = body.filial?.trim().toUpperCase();
+
     const ativo = body.ativo;
 
     if (
@@ -628,6 +722,7 @@ export class AniversariantesKmmService {
 
         nome: {
           equals: nome,
+
           mode: 'insensitive',
         },
 
@@ -635,6 +730,7 @@ export class AniversariantesKmmService {
 
         filial: {
           equals: filial,
+
           mode: 'insensitive',
         },
       },
@@ -653,33 +749,56 @@ export class AniversariantesKmmService {
 
       data: {
         nome,
+
         dataNascimento,
+
         filial,
+
         ativo,
       },
     });
   }
 
+  private inicioDoDiaUtc(data: Date): Date {
+    return new Date(
+      Date.UTC(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate()),
+    );
+  }
+
   async findAniversarioAndAdmissao() {
     const sql = `
+      WITH funcionarios_ordenados AS (
+        SELECT
+          FD."COD_PESSOA",
+          FD."NOME",
+          TO_CHAR(FD."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
+          TO_CHAR(FD."DATA_ADMISSAO", 'YYYY-MM-DD') AS "DATA_ADMISSAO",
+          TO_CHAR(FD."DATA_DEMISSAO", 'YYYY-MM-DD') AS "DATA_DEMISSAO",
+          FD."SEXO",
+          ROW_NUMBER() OVER (
+            PARTITION BY UPPER(TRIM(FD."NOME"))
+            ORDER BY
+              FD."DATA_ADMISSAO" DESC NULLS LAST,
+              FD."DATA_DEMISSAO" DESC NULLS LAST,
+              FD."COD_PESSOA" DESC
+          ) AS rn
+        FROM FOLHA.FUNCIONARIO_DADOS FD
+        WHERE FD."NOME" IS NOT NULL
+          AND (
+            FD."DATA_NASCIMENTO" IS NOT NULL
+            OR FD."DATA_ADMISSAO" IS NOT NULL
+            OR FD."DATA_DEMISSAO" IS NOT NULL
+          )
+      )
       SELECT
-        FD."NOME",
-        TO_CHAR(FD."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
-        TO_CHAR(FD."DATA_ADMISSAO", 'YYYY-MM-DD') AS "DATA_ADMISSAO",
-        TO_CHAR(FD."DATA_DEMISSAO", 'YYYY-MM-DD') AS "DATA_DEMISSAO",
-        FD."SEXO"
-      FROM FOLHA.FUNCIONARIO_DADOS FD
-      WHERE
-        FD."NOME" IS NOT NULL
-        AND (
-          FD."DATA_NASCIMENTO" IS NOT NULL
-          OR FD."DATA_ADMISSAO" IS NOT NULL
-          OR FD."DATA_DEMISSAO" IS NOT NULL
-        )
+        "COD_PESSOA", "NOME", "DATA_NASCIMENTO", "DATA_ADMISSAO",
+        "DATA_DEMISSAO", "SEXO"
+      FROM funcionarios_ordenados
+      WHERE rn = 1
+      ORDER BY "NOME" ASC
     `;
 
     const result = await this.kmmDatabaseService.query(sql);
-
     return result.rows;
   }
 }
