@@ -451,7 +451,7 @@ export class AniversariantesKmmService {
       ORIGEM: 'KMM',
     }));
 
-    await this.sincronizarDatasUsuarioChat();
+    // await this.sincronizarDatasUsuarioChat();
 
     const aniversariantesPjBanco = await this.prisma.aniversariantesPj.findMany(
       {
@@ -838,5 +838,168 @@ export class AniversariantesKmmService {
 
     const result = await this.kmmDatabaseService.query(sql);
     return result.rows;
+  }
+
+  async importarAdmissoesPj(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Nenhuma planilha foi enviada.');
+    }
+
+    const extensao = file.originalname.split('.').pop()?.toLowerCase();
+
+    if (!['xlsx', 'xls'].includes(extensao || '')) {
+      throw new BadRequestException(
+        'Formato inválido. Envie uma planilha Excel.',
+      );
+    }
+
+    const workbook = XLSX.read(file.buffer, {
+      type: 'buffer',
+      cellDates: false,
+    });
+
+    const primeiraAba = workbook.SheetNames[0];
+
+    if (!primeiraAba) {
+      throw new BadRequestException('A planilha não possui abas.');
+    }
+
+    const worksheet = workbook.Sheets[primeiraAba];
+
+    const registros = XLSX.utils.sheet_to_json<{
+      Nome?: string;
+      'Data Admissao'?: string;
+      'Data Nascimento'?: string;
+    }>(worksheet, {
+      defval: '',
+      raw: false,
+    });
+
+    if (!registros.length) {
+      throw new BadRequestException('A planilha está vazia.');
+    }
+
+    const converterDataBr = (valor: string): Date | null => {
+      const texto = String(valor || '').trim();
+
+      const match = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+      if (!match) return null;
+
+      const [, dia, mes, ano] = match;
+
+      const data = new Date(
+        Date.UTC(Number(ano), Number(mes) - 1, Number(dia)),
+      );
+
+      if (
+        data.getUTCFullYear() !== Number(ano) ||
+        data.getUTCMonth() !== Number(mes) - 1 ||
+        data.getUTCDate() !== Number(dia)
+      ) {
+        return null;
+      }
+
+      return data;
+    };
+
+    const usuariosChat = await this.prisma.usuarioChat.findMany({
+      select: {
+        id: true,
+        nome: true,
+      },
+    });
+
+    const usuariosPorNome = new Map<string, typeof usuariosChat>();
+
+    for (const usuario of usuariosChat) {
+      const nome = this.normalizarNome(usuario.nome);
+
+      const grupo = usuariosPorNome.get(nome) ?? [];
+
+      grupo.push(usuario);
+
+      usuariosPorNome.set(nome, grupo);
+    }
+
+    let totalAtualizados = 0;
+
+    const naoEncontrados: string[] = [];
+    const duplicados: string[] = [];
+    const invalidos: string[] = [];
+
+    const nomesProcessados = new Set<string>();
+
+    for (const registro of registros) {
+      const nomeOriginal = String(registro.Nome || '').trim();
+
+      const nomeNormalizado = this.normalizarNome(nomeOriginal);
+
+      if (!nomeNormalizado) {
+        invalidos.push('Linha sem nome');
+        continue;
+      }
+
+      if (nomesProcessados.has(nomeNormalizado)) {
+        duplicados.push(nomeOriginal);
+        continue;
+      }
+
+      nomesProcessados.add(nomeNormalizado);
+
+      const dataAdmissao = converterDataBr(
+        String(registro['Data Admissao'] || ''),
+      );
+
+      const dataNascimento = converterDataBr(
+        String(registro['Data Nascimento'] || ''),
+      );
+
+      if (!dataAdmissao || !dataNascimento) {
+        invalidos.push(nomeOriginal);
+        continue;
+      }
+
+      const encontrados = usuariosPorNome.get(nomeNormalizado) ?? [];
+
+      if (!encontrados.length) {
+        naoEncontrados.push(nomeOriginal);
+        continue;
+      }
+
+      if (encontrados.length > 1) {
+        duplicados.push(nomeOriginal);
+        continue;
+      }
+
+      const usuario = encontrados[0];
+
+      await this.prisma.usuarioChat.update({
+        where: {
+          id: usuario.id,
+        },
+        data: {
+          dataAdmissao,
+          dataNascimento,
+          dataDemissao: null,
+          ativo: true,
+          tipoContratacao: 'PJ',
+        },
+      });
+
+      totalAtualizados++;
+    }
+
+    return {
+      mensagem: 'Importação de admissões PJ finalizada.',
+      totalLinhas: registros.length,
+      totalAtualizados,
+      totalNaoEncontrados: naoEncontrados.length,
+      totalDuplicados: duplicados.length,
+      totalInvalidos: invalidos.length,
+      naoEncontrados,
+      duplicados,
+      invalidos,
+    };
   }
 }

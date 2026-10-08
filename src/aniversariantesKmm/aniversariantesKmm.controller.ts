@@ -70,4 +70,17 @@ export class AniversariantesKmmController {
       body,
     );
   }
+
+  @Post('importar-admissoes-pj')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  async importarAdmissoesPj(@UploadedFile() file: Express.Multer.File) {
+    return this.aniversariantesKmmService.importarAdmissoesPj(file);
+  }
 }
