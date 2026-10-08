@@ -9,5 +9,6 @@ import { KmmDatabaseModule } from '@/database/kmm/kmm-database.module';
   imports: [AuthModule, KmmDatabaseModule],
   controllers: [AniversariantesKmmController],
   providers: [AniversariantesKmmService, PrismaService],
+  exports: [AniversariantesKmmService],
 })
 export class AniversariantesKmmModule {}

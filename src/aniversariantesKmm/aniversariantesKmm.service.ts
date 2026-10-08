@@ -111,6 +111,139 @@ export class AniversariantesKmmService {
     return data;
   }
 
+  private normalizarNome(valor: string): string {
+    return String(valor || '')
+      .trim()
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  private converterData(valor?: string | null): Date | null {
+    if (!valor) {
+      return null;
+    }
+
+    const data = String(valor).trim();
+
+    if (!data) {
+      return null;
+    }
+
+    const dataConvertida = new Date(`${data}T00:00:00.000Z`);
+
+    if (Number.isNaN(dataConvertida.getTime())) {
+      return null;
+    }
+
+    return dataConvertida;
+  }
+
+  async sincronizarDatasUsuarioChat() {
+    const funcionarios = await this.findAniversarioAndAdmissao();
+
+    if (!funcionarios?.length) {
+      return {
+        totalFuncionariosKmm: 0,
+        totalUsuariosAtualizados: 0,
+      };
+    }
+
+    const usuariosChat = await this.prisma.usuarioChat.findMany({
+      select: {
+        id: true,
+        nome: true,
+        ativo: true,
+        dataNascimento: true,
+        dataAdmissao: true,
+        dataDemissao: true,
+      },
+    });
+
+    if (!usuariosChat.length) {
+      return {
+        totalFuncionariosKmm: funcionarios.length,
+        totalUsuariosAtualizados: 0,
+      };
+    }
+
+    const usuariosPorNome = new Map(
+      usuariosChat.map((usuario) => [
+        this.normalizarNome(usuario.nome),
+        usuario,
+      ]),
+    );
+
+    const updates: Promise<any>[] = [];
+
+    for (const funcionario of funcionarios) {
+      const nomeNormalizado = this.normalizarNome(funcionario.NOME);
+
+      const usuarioChat = usuariosPorNome.get(nomeNormalizado);
+
+      if (!usuarioChat) {
+        continue;
+      }
+
+      const dataNascimento = this.converterData(funcionario.DATA_NASCIMENTO);
+
+      const dataAdmissao = this.converterData(funcionario.DATA_ADMISSAO);
+
+      const dataDemissao = this.converterData(funcionario.DATA_DEMISSAO);
+
+      const dataUpdate: {
+        dataNascimento?: Date;
+        dataAdmissao?: Date;
+        dataDemissao?: Date;
+        ativo?: boolean;
+      } = {};
+
+      // Preenche nascimento somente se ainda estiver vazio
+      if (!usuarioChat.dataNascimento && dataNascimento) {
+        dataUpdate.dataNascimento = dataNascimento;
+      }
+
+      // Preenche admissão somente se ainda estiver vazio
+      if (!usuarioChat.dataAdmissao && dataAdmissao) {
+        dataUpdate.dataAdmissao = dataAdmissao;
+      }
+
+      // Se houver demissão no KMM
+      if (dataDemissao) {
+        if (!usuarioChat.dataDemissao) {
+          dataUpdate.dataDemissao = dataDemissao;
+        }
+
+        if (usuarioChat.ativo) {
+          dataUpdate.ativo = false;
+        }
+      }
+
+      if (Object.keys(dataUpdate).length === 0) {
+        continue;
+      }
+
+      updates.push(
+        this.prisma.usuarioChat.update({
+          where: {
+            id: usuarioChat.id,
+          },
+          data: dataUpdate,
+        }),
+      );
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
+
+    return {
+      totalFuncionariosKmm: funcionarios.length,
+      totalUsuariosAtualizados: updates.length,
+    };
+  }
+
   async findAllAniversariantes(body: any, user: any) {
     const podeVerInativos =
       user.roles.includes('DESENVOLVIMENTO') ||
@@ -224,6 +357,8 @@ export class AniversariantesKmmService {
       TIPO: 'COLABORADOR',
       ORIGEM: 'KMM',
     }));
+
+    await this.sincronizarDatasUsuarioChat();
 
     const aniversariantesPjBanco = await this.prisma.aniversariantesPj.findMany(
       {
@@ -523,5 +658,28 @@ export class AniversariantesKmmService {
         ativo,
       },
     });
+  }
+
+  async findAniversarioAndAdmissao() {
+    const sql = `
+      SELECT
+        FD."NOME",
+        TO_CHAR(FD."DATA_NASCIMENTO", 'YYYY-MM-DD') AS "DATA_NASCIMENTO",
+        TO_CHAR(FD."DATA_ADMISSAO", 'YYYY-MM-DD') AS "DATA_ADMISSAO",
+        TO_CHAR(FD."DATA_DEMISSAO", 'YYYY-MM-DD') AS "DATA_DEMISSAO",
+        FD."SEXO"
+      FROM FOLHA.FUNCIONARIO_DADOS FD
+      WHERE
+        FD."NOME" IS NOT NULL
+        AND (
+          FD."DATA_NASCIMENTO" IS NOT NULL
+          OR FD."DATA_ADMISSAO" IS NOT NULL
+          OR FD."DATA_DEMISSAO" IS NOT NULL
+        )
+    `;
+
+    const result = await this.kmmDatabaseService.query(sql);
+
+    return result.rows;
   }
 }

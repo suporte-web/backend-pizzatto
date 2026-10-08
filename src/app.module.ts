@@ -33,6 +33,8 @@ import { GestaoLicencasModule } from './gestaoLicencas/gestaoLicencas.module';
 import { FeedModule } from './feed/feed.module';
 import { SaudeEmDiaModule } from './saudeEmDia/saudeEmDia.module';
 import { SegurancaEmAcaoModule } from './segurancaEmAcao/segurancaEmAcao.module';
+import { FeriadosModule } from './feriados/feriados.module';
+import { FeriasModule } from './ferias/ferias.module';
 
 @Module({
   imports: [
@@ -67,6 +69,8 @@ import { SegurancaEmAcaoModule } from './segurancaEmAcao/segurancaEmAcao.module'
     FeedModule,
     SaudeEmDiaModule,
     SegurancaEmAcaoModule,
+    FeriadosModule,
+    FeriasModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

@@ -320,10 +320,15 @@ model UsuarioChat {
   createdAt                              DateTime                                 @default(now()) @db.Timestamp(6)
   updatedAt                              DateTime                                 @default(now()) @db.Timestamp(6)
   cargo                                  String?
+  dataAdmissao                           DateTime?                                @db.Date
+  dataNascimento                         DateTime?                                @db.Date
+  dataDemissao                           DateTime?                                @db.Date
+  tipoContratacao                        TipoContratacao?
   Conversa                               Conversa[]
   DashboardAcesso                        DashboardAcesso[]
   Mensagem                               Mensagem[]
   ParticipanteConversa                   ParticipanteConversa[]
+  PeriodoAquisitivoFerias                PeriodoAquisitivoFerias[]
   RecrutamentoInternoCandidato           RecrutamentoInternoCandidato[]
   RecrutamentoInternoCandidatoObservacao RecrutamentoInternoCandidatoObservacao[]
 
@@ -1112,6 +1117,140 @@ model FeedPublicacaoHashtag {
   @@index([publicacaoId])
 }
 
+model Feriado {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome        String
+  dataFeriado DateTime        @db.Date
+  tipoFeriado TipoFeriado
+  ativo       Boolean         @default(true)
+  observacao  String?
+  filiais     FilialFeriado[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @db.Timestamp(6)
+  recorrente  Boolean         @default(false)
+
+  @@index([dataFeriado])
+  @@index([tipoFeriado])
+}
+
+model DocumentoFerias {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parcelaId             String              @db.Uuid
+  tipoDocumento         TipoDocumentoFerias
+  nomeArquivo           String
+  arquivoUrl            String
+  mimeType              String?
+  tamanho               Int?
+  geradoAutomaticamente Boolean             @default(false)
+  disponibilizadoEm     DateTime?
+  assinadoEm            DateTime?
+  uploadedPorUsuario    String?
+  uploadedPorNome       String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @default(now()) @db.Timestamp(6)
+  ParcelaFerias         ParcelaFerias       @relation(fields: [parcelaId], references: [id], onDelete: Cascade)
+
+  @@index([parcelaId])
+  @@index([tipoDocumento])
+}
+
+model HistoricoSolicitacaoFerias {
+  id                 String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  solicitacaoId      String                    @db.Uuid
+  tipoEvento         TipoEventoHistoricoFerias
+  descricao          String?
+  statusAnterior     String?
+  statusNovo         String?
+  responsavelUsuario String?
+  responsavelNome    String?
+  responsavelEmail   String?
+  dadosAnteriores    Json?
+  dadosNovos         Json?
+  ipAddress          String?
+  createdAt          DateTime                  @default(now())
+  SolicitacaoFerias  SolicitacaoFerias         @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([solicitacaoId])
+  @@index([tipoEvento])
+}
+
+model ParcelaFerias {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  solicitacaoId     String              @db.Uuid
+  ordem             Int
+  quantidadeDias    Int
+  dataInicio        DateTime            @db.Date
+  dataFim           DateTime            @db.Date
+  dataRetorno       DateTime            @db.Date
+  status            StatusParcelaFerias @default(AGUARDANDO_APROVACAO)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now()) @db.Timestamp(6)
+  DocumentoFerias   DocumentoFerias[]
+  SolicitacaoFerias SolicitacaoFerias   @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([solicitacaoId, ordem])
+  @@index([dataFim])
+  @@index([dataInicio])
+  @@index([solicitacaoId])
+  @@index([status])
+}
+
+model PeriodoAquisitivoFerias {
+  id                    String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuarioId             String                        @db.Uuid
+  anoVigencia           Int
+  dataInicioAquisitivo  DateTime                      @db.Date
+  dataFimAquisitivo     DateTime                      @db.Date
+  dataLimiteConcessivo  DateTime                      @db.Date
+  quantidadeDiasDireito Int                           @default(30)
+  diasUtilizados        Int                           @default(0)
+  diasVendidos          Int                           @default(0)
+  status                StatusPeriodoAquisitivoFerias @default(DISPONIVEL)
+  alerta90EnviadoEm     DateTime?
+  alerta60EnviadoEm     DateTime?
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @default(now()) @db.Timestamp(6)
+  UsuarioChat           UsuarioChat                   @relation(fields: [usuarioId], references: [id])
+  SolicitacaoFerias     SolicitacaoFerias[]
+
+  @@unique([usuarioId, anoVigencia])
+  @@index([anoVigencia])
+  @@index([dataLimiteConcessivo])
+  @@index([status])
+  @@index([usuarioId])
+}
+
+model SolicitacaoFerias {
+  id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  periodoAquisitivoId        String                       @db.Uuid
+  modalidade                 ModalidadeFerias
+  quantidadeDiasFerias       Int
+  quantidadeDiasVendidos     Int                          @default(0)
+  status                     StatusSolicitacaoFerias      @default(AGUARDANDO_APROVACAO)
+  empresa                    String?
+  cargo                      String?
+  tipoContratacao            TipoContratacao?
+  gestorUsuario              String?
+  gestorNome                 String?
+  gestorEmail                String?
+  aprovadoPorUsuario         String?
+  aprovadoPorNome            String?
+  aprovadoPorEmail           String?
+  aprovadoEm                 DateTime?
+  motivoReprovacao           String?
+  motivoCancelamento         String?
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @default(now()) @db.Timestamp(6)
+  HistoricoSolicitacaoFerias HistoricoSolicitacaoFerias[]
+  ParcelaFerias              ParcelaFerias[]
+  PeriodoAquisitivoFerias    PeriodoAquisitivoFerias      @relation(fields: [periodoAquisitivoId], references: [id])
+
+  @@index([createdAt])
+  @@index([periodoAquisitivoId])
+  @@index([status])
+}
+
 enum Area {
   Sistemas
   Infra
@@ -1185,4 +1324,94 @@ enum FeedTipoMidia {
   IMAGEM
   VIDEO
   ARQUIVO
+}
+
+enum FilialFeriado {
+  Campina_Grande         @map("Campina Grande")
+  CEP_Port_o             @map("CEP Portão")
+  Costeira
+  COP___Boticario        @map("COP - Boticario")
+  Matriz
+  Araraquara
+  Guarulhos
+  Cama_ari               @map("Camaçari")
+  Feira_de_Santana       @map("Feira de Santana")
+  S_o_Gon_alo_dos_Campos @map("São Gonçalo dos Campos")
+  Varginha
+  Campo_Grande           @map("Campo Grande")
+  Serra
+  Registro
+  Itupeva
+  Louveira
+}
+
+enum TipoFeriado {
+  NACIONAL
+  ESTADUAL
+  MUNICIPAL
+  EMPRESA
+  PONTO_FACULTATIVO
+}
+
+enum ModalidadeFerias {
+  DIAS_30
+  DIAS_25_5
+  DIAS_20_10
+  DIAS_15_15
+  DIAS_20_10_VENDIDOS
+  DIAS_15_10_5
+  DIAS_20_5_5
+}
+
+enum StatusParcelaFerias {
+  AGUARDANDO_APROVACAO
+  APROVADO
+  REPROVADO
+  DOCUMENTO_DISPONIVEL
+  DOCUMENTO_ASSINADO
+  EM_FERIAS
+  FERIAS_RETIRADAS
+  CANCELADO
+}
+
+enum StatusPeriodoAquisitivoFerias {
+  DISPONIVEL
+  PROGRAMADO
+  EM_ANDAMENTO
+  CONCLUIDO
+  VENCIDO
+  EM_AQUISICAO
+}
+
+enum StatusSolicitacaoFerias {
+  AGUARDANDO_APROVACAO
+  APROVADO
+  REPROVADO
+  CANCELADO
+  EM_ANDAMENTO
+  CONCLUIDO
+}
+
+enum TipoContratacao {
+  CLT
+  PJ
+}
+
+enum TipoDocumentoFerias {
+  AVISO_FERIAS
+  AVISO_FERIAS_ASSINADO
+  OUTRO
+}
+
+enum TipoEventoHistoricoFerias {
+  CRIACAO
+  EDICAO
+  APROVACAO
+  REPROVACAO
+  CANCELAMENTO
+  ALTERACAO_STATUS
+  DOCUMENTO_DISPONIBILIZADO
+  DOCUMENTO_ASSINADO
+  ALERTA_90_DIAS
+  ALERTA_60_DIAS
 }
