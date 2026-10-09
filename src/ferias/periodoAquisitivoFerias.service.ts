@@ -272,6 +272,7 @@ export class PeriodoAquisitivoFeriasService {
 
     const page = Number(body?.page ?? 1);
     const limit = Number(body?.limit ?? 10);
+    const pesquisa = String(body?.pesquisa ?? '').trim();
 
     if (
       !Number.isInteger(page) ||
@@ -287,57 +288,15 @@ export class PeriodoAquisitivoFeriasService {
 
     const skip = (page - 1) * limit;
 
-    const pesquisa = String(body?.pesquisa ?? '').trim();
-
-    // Identifica os colaboradores vinculados ao gestor
-    // por meio das solicitações de férias existentes.
-    const colaboradoresEquipe = await this.prisma.solicitacaoFerias.findMany({
-      where: {
-        gestorUsuario: {
-          equals: gestorSam,
-          mode: 'insensitive',
-        },
-      },
-
-      select: {
-        PeriodoAquisitivoFerias: {
-          select: {
-            usuarioId: true,
-          },
-        },
-      },
-
-      distinct: ['periodoAquisitivoId'],
-    });
-
-    const usuarioIds = [
-      ...new Set(
-        colaboradoresEquipe
-          .map((solicitacao) => solicitacao.PeriodoAquisitivoFerias?.usuarioId)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-
-    if (usuarioIds.length === 0) {
-      return {
-        data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          totalPages: 0,
-        },
-      };
-    }
-
     const where: Prisma.PeriodoAquisitivoFeriasWhereInput = {
-      usuarioId: {
-        in: usuarioIds,
-      },
-
       UsuarioChat: {
         is: {
           ativo: true,
+
+          gestorUsuario: {
+            equals: gestorSam,
+            mode: 'insensitive',
+          },
 
           ...(pesquisa
             ? {
