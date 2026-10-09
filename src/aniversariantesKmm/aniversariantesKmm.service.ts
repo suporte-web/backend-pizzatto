@@ -159,6 +159,11 @@ export class AniversariantesKmmService {
     const funcionarios = await this.findAniversarioAndAdmissao();
 
     const usuariosChat = await this.prisma.usuarioChat.findMany({
+      where: {
+        NOT: {
+          tipoContratacao: 'PJ',
+        },
+      },
       select: {
         id: true,
         nome: true,
@@ -280,12 +285,19 @@ export class AniversariantesKmmService {
         continue;
       }
 
-      await this.prisma.usuarioChat.update({
+      const resultado = await this.prisma.usuarioChat.updateMany({
         where: {
           id: usuarioChat.id,
+          NOT: {
+            tipoContratacao: 'PJ',
+          },
         },
         data: dataUpdate,
       });
+
+      if (resultado.count === 0) {
+        continue;
+      }
 
       totalUsuariosAtualizados++;
 
