@@ -3,10 +3,15 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { FeriasRegrasService } from './feriasRegras.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { Prisma } from '../../generated/prisma/client';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { extname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 @Injectable()
 export class SolicitacaoFeriasService {
@@ -558,6 +563,27 @@ export class SolicitacaoFeriasService {
             orderBy: {
               ordem: 'asc',
             },
+            include: {
+              DocumentoFerias: {
+                orderBy: {
+                  createdAt: 'desc',
+                },
+                select: {
+                  id: true,
+                  parcelaId: true,
+                  tipoDocumento: true,
+                  nomeArquivo: true,
+                  arquivoUrl: true,
+                  mimeType: true,
+                  tamanho: true,
+                  geradoAutomaticamente: true,
+                  disponibilizadoEm: true,
+                  assinadoEm: true,
+                  uploadedPorNome: true,
+                  createdAt: true,
+                },
+              },
+            },
           },
 
           HistoricoSolicitacaoFerias: {
@@ -586,13 +612,13 @@ export class SolicitacaoFeriasService {
   }
 
   async aprovarSolicitacao(
-    solicitacaoId: string,
+    parcelaId: string,
     ip: string,
     user: any,
     authorization: string,
   ) {
-    if (!solicitacaoId) {
-      throw new BadRequestException('Solicitação de férias é obrigatória.');
+    if (!parcelaId?.trim()) {
+      throw new BadRequestException('Parcela de férias é obrigatória.');
     }
 
     const usuarioAd = user?.sam;
@@ -603,9 +629,21 @@ export class SolicitacaoFeriasService {
       );
     }
 
+    // 1. Buscar a parcela e sua solicitação
+
+    const parcela = await this.prisma.parcelaFerias.findUnique({
+      where: {
+        id: parcelaId,
+      },
+    });
+
+    if (!parcela) {
+      throw new BadRequestException('Parcela de férias não encontrada.');
+    }
+
     const solicitacao = await this.prisma.solicitacaoFerias.findUnique({
       where: {
-        id: solicitacaoId,
+        id: parcela.solicitacaoId,
       },
 
       include: {
@@ -624,22 +662,34 @@ export class SolicitacaoFeriasService {
             },
           },
         },
-
-        ParcelaFerias: {
-          orderBy: {
-            ordem: 'asc',
-          },
-        },
       },
     });
 
     if (!solicitacao) {
-      throw new BadRequestException('Solicitação de férias não encontrada.');
+      throw new BadRequestException(
+        'Solicitação vinculada à parcela não encontrada.',
+      );
     }
 
-    if (solicitacao.status !== 'AGUARDANDO_APROVACAO') {
+    if (!solicitacao) {
       throw new BadRequestException(
-        `A solicitação não pode ser aprovada porque está com status ${solicitacao.status}.`,
+        'Solicitação vinculada à parcela não encontrada.',
+      );
+    }
+
+    // 2. Validar status da parcela
+    if (parcela.status !== 'AGUARDANDO_APROVACAO') {
+      throw new BadRequestException(
+        `O período ${parcela.ordem} não pode ser aprovado porque está com status ${parcela.status}.`,
+      );
+    }
+
+    // 3. Validar status da solicitação
+    const statusPermitidos = ['AGUARDANDO_APROVACAO', 'APROVADO_PARCIALMENTE'];
+
+    if (!statusPermitidos.includes(solicitacao.status)) {
+      throw new BadRequestException(
+        `A solicitação não pode receber aprovações porque está com status ${solicitacao.status}.`,
       );
     }
 
@@ -650,7 +700,7 @@ export class SolicitacaoFeriasService {
     }
 
     const colaboradorSam =
-      solicitacao.PeriodoAquisitivoFerias.UsuarioChat.usuario;
+      solicitacao.PeriodoAquisitivoFerias?.UsuarioChat?.usuario;
 
     if (!colaboradorSam) {
       throw new BadRequestException(
@@ -658,6 +708,7 @@ export class SolicitacaoFeriasService {
       );
     }
 
+    // 4. Validar gestor responsável
     const gestorSolicitacao = solicitacao.gestorUsuario.trim().toLowerCase();
 
     const usuarioAutenticado = String(usuarioAd).trim().toLowerCase();
@@ -680,96 +731,251 @@ export class SolicitacaoFeriasService {
 
       if (!validacao?.autorizado || validacao?.tipo !== 'GESTOR_SUPERIOR') {
         throw new ForbiddenException(
-          'Você não possui permissão para aprovar esta solicitação de férias.',
+          'Você não possui permissão para aprovar este período de férias.',
         );
       }
 
       tipoAprovador = 'GESTOR_SUPERIOR';
     }
 
+    // 5. Dados do aprovador
     const aprovadoPorUsuario = user?.sam ?? null;
-
     const aprovadoPorNome = user?.name ?? null;
-
     const aprovadoPorEmail = user?.mail ?? null;
 
-    const aprovadoEm = new Date();
+    // 6. Transação com proteção contra concorrência
+    const maxTentativas = 3;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.solicitacaoFerias.update({
-        where: {
-          id: solicitacao.id,
-        },
+    for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+      try {
+        await this.prisma.$transaction(
+          async (tx) => {
+            // Consultar novamente a solicitação dentro da transação
+            const solicitacaoAtual = await tx.solicitacaoFerias.findUnique({
+              where: {
+                id: solicitacao.id,
+              },
 
-        data: {
-          status: 'APROVADO',
+              select: {
+                id: true,
+                status: true,
+              },
+            });
 
-          aprovadoPorUsuario,
-          aprovadoPorNome,
-          aprovadoPorEmail,
-          aprovadoEm,
+            if (!solicitacaoAtual) {
+              throw new BadRequestException(
+                'Solicitação de férias não encontrada.',
+              );
+            }
 
-          motivoReprovacao: null,
-        },
-      });
+            if (!statusPermitidos.includes(solicitacaoAtual.status)) {
+              throw new BadRequestException(
+                `A solicitação não pode receber aprovações porque está com status ${solicitacaoAtual.status}.`,
+              );
+            }
 
-      await tx.parcelaFerias.updateMany({
-        where: {
-          solicitacaoId: solicitacao.id,
-        },
+            const parcelaAtual = await tx.parcelaFerias.findUnique({
+              where: {
+                id: parcelaId,
+              },
 
-        data: {
-          status: 'APROVADO',
-        },
-      });
+              select: {
+                id: true,
+                solicitacaoId: true,
+                ordem: true,
+                status: true,
+                aprovadoPorUsuario: true,
+                aprovadoPorNome: true,
+                aprovadoPorEmail: true,
+                aprovadoEm: true,
+              },
+            });
 
-      await tx.historicoSolicitacaoFerias.create({
-        data: {
-          solicitacaoId: solicitacao.id,
+            if (
+              !parcelaAtual ||
+              parcelaAtual.solicitacaoId !== solicitacao.id
+            ) {
+              throw new BadRequestException(
+                'Parcela de férias não encontrada nesta solicitação.',
+              );
+            }
 
-          tipoEvento: 'APROVACAO',
+            if (parcelaAtual.status !== 'AGUARDANDO_APROVACAO') {
+              throw new BadRequestException(
+                `O período ${parcelaAtual.ordem} já foi aprovado ou teve seu status alterado.`,
+              );
+            }
 
-          descricao: 'Solicitação de férias aprovada pelo gestor.',
+            const aprovadoEm = new Date();
 
-          statusAnterior: solicitacao.status,
+            // 7. Aprovar somente a parcela selecionada
+            const resultado = await tx.parcelaFerias.updateMany({
+              where: {
+                id: parcelaId,
+                solicitacaoId: solicitacao.id,
+                status: 'AGUARDANDO_APROVACAO',
+              },
 
-          statusNovo: 'APROVADO',
+              data: {
+                status: 'APROVADO',
 
-          responsavelUsuario: aprovadoPorUsuario,
+                aprovadoPorUsuario,
+                aprovadoPorNome,
+                aprovadoPorEmail,
+                aprovadoEm,
+              },
+            });
 
-          responsavelNome: aprovadoPorNome,
+            if (resultado.count !== 1) {
+              throw new BadRequestException(
+                'Este período já foi aprovado ou teve seu status alterado.',
+              );
+            }
 
-          responsavelEmail: aprovadoPorEmail,
+            // 8. Consultar todas as parcelas atualizadas
+            const parcelasAtualizadas = await tx.parcelaFerias.findMany({
+              where: {
+                solicitacaoId: solicitacao.id,
+              },
 
-          ipAddress: ip,
+              select: {
+                id: true,
+                ordem: true,
+                status: true,
+              },
 
-          dadosAnteriores: {
-            status: solicitacao.status,
+              orderBy: {
+                ordem: 'asc',
+              },
+            });
 
-            aprovadoPorUsuario: solicitacao.aprovadoPorUsuario,
+            if (parcelasAtualizadas.length === 0) {
+              throw new BadRequestException(
+                'A solicitação não possui períodos de férias.',
+              );
+            }
 
-            aprovadoPorNome: solicitacao.aprovadoPorNome,
+            const quantidadeParcelas = parcelasAtualizadas.length;
 
-            aprovadoPorEmail: solicitacao.aprovadoPorEmail,
+            const quantidadeAprovadas = parcelasAtualizadas.filter(
+              (item) => item.status === 'APROVADO',
+            ).length;
 
-            aprovadoEm: solicitacao.aprovadoEm,
+            const todasAprovadas = quantidadeAprovadas === quantidadeParcelas;
+
+            // 9. Definir o status geral da solicitação
+            const novoStatusSolicitacao = todasAprovadas
+              ? 'APROVADO'
+              : 'APROVADO_PARCIALMENTE';
+
+            // 10. Atualizar a solicitação
+            await tx.solicitacaoFerias.update({
+              where: {
+                id: solicitacao.id,
+              },
+
+              data: {
+                status: novoStatusSolicitacao,
+
+                // Dados gerais somente quando todas
+                // as parcelas estiverem aprovadas
+                ...(todasAprovadas
+                  ? {
+                      aprovadoPorUsuario,
+                      aprovadoPorNome,
+                      aprovadoPorEmail,
+                      aprovadoEm,
+                      motivoReprovacao: null,
+                    }
+                  : {}),
+              },
+            });
+
+            // 11. Registrar histórico individual
+            await tx.historicoSolicitacaoFerias.create({
+              data: {
+                solicitacaoId: solicitacao.id,
+
+                tipoEvento: 'APROVACAO',
+
+                descricao: `Período ${parcelaAtual.ordem} de férias aprovado por ${aprovadoPorNome ?? aprovadoPorUsuario ?? 'gestor'}.`,
+
+                statusAnterior: solicitacaoAtual.status,
+                statusNovo: novoStatusSolicitacao,
+
+                responsavelUsuario: aprovadoPorUsuario,
+                responsavelNome: aprovadoPorNome,
+                responsavelEmail: aprovadoPorEmail,
+
+                ipAddress: ip,
+
+                dadosAnteriores: {
+                  parcelaId: parcelaAtual.id,
+                  ordem: parcelaAtual.ordem,
+
+                  statusParcela: parcelaAtual.status,
+                  statusSolicitacao: solicitacaoAtual.status,
+
+                  aprovadoPorUsuario: parcelaAtual.aprovadoPorUsuario,
+
+                  aprovadoPorNome: parcelaAtual.aprovadoPorNome,
+
+                  aprovadoPorEmail: parcelaAtual.aprovadoPorEmail,
+
+                  aprovadoEm: parcelaAtual.aprovadoEm?.toISOString() ?? null,
+                },
+
+                dadosNovos: {
+                  parcelaId: parcelaAtual.id,
+                  ordem: parcelaAtual.ordem,
+
+                  statusParcela: 'APROVADO',
+                  statusSolicitacao: novoStatusSolicitacao,
+
+                  tipoAprovador,
+
+                  aprovadoPorUsuario,
+                  aprovadoPorNome,
+                  aprovadoPorEmail,
+                  aprovadoEm: aprovadoEm.toISOString(),
+
+                  quantidadeParcelas,
+                  quantidadeAprovadas,
+                  todasParcelasAprovadas: todasAprovadas,
+                },
+              },
+            });
           },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
 
-          dadosNovos: {
-            status: 'APROVADO',
-
-            tipoAprovador,
-
-            aprovadoPorUsuario,
-            aprovadoPorNome,
-            aprovadoPorEmail,
-
-            aprovadoEm: aprovadoEm.toISOString(),
+            maxWait: 5000,
+            timeout: 10000,
           },
-        },
-      });
-    });
+        );
 
+        // Transação concluída
+        break;
+      } catch (error) {
+        const conflitoConcorrencia =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034';
+
+        if (conflitoConcorrencia && tentativa < maxTentativas) {
+          continue;
+        }
+
+        if (conflitoConcorrencia) {
+          throw new BadRequestException(
+            'Não foi possível concluir a aprovação devido a alterações simultâneas. Tente novamente.',
+          );
+        }
+
+        throw error;
+      }
+    }
+
+    // 12. Retornar a solicitação completa
     return await this.prisma.solicitacaoFerias.findUnique({
       where: {
         id: solicitacao.id,
@@ -1381,36 +1587,34 @@ export class SolicitacaoFeriasService {
       throw new BadRequestException('Parcela de férias é obrigatória.');
     }
 
-    if (!body?.nomeArquivo) {
-      throw new BadRequestException('Nome do arquivo é obrigatório.');
+    const arquivo = body?.arquivo as Express.Multer.File | undefined;
+
+    if (!arquivo) {
+      throw new BadRequestException('Documento PDF é obrigatório.');
     }
 
-    if (!body?.arquivoUrl) {
-      throw new BadRequestException('Arquivo é obrigatório.');
+    if (
+      arquivo.mimetype !== 'application/pdf' ||
+      extname(arquivo.originalname).toLowerCase() !== '.pdf'
+    ) {
+      throw new BadRequestException('Somente arquivos PDF são permitidos.');
     }
 
-    /*
-     * ================================
-     * Permissão RH
-     * ================================
-     */
+    if (arquivo.size > 10 * 1024 * 1024) {
+      throw new BadRequestException('O documento deve possuir no máximo 10MB.');
+    }
 
     const roles = Array.isArray(user?.roles) ? user.roles : [];
 
     const podeDisponibilizar =
-      roles.includes('PESSOAS_E_CULTURA') || roles.includes('ADMIN');
+      roles.includes('DEPARTAMENTO_PESSOAL') ||
+      roles.includes('DESENVOLVIMENTO');
 
     if (!podeDisponibilizar) {
       throw new ForbiddenException(
         'Você não possui permissão para disponibilizar documentos de férias.',
       );
     }
-
-    /*
-     * ================================
-     * Busca parcela
-     * ================================
-     */
 
     const parcela = await this.prisma.parcelaFerias.findUnique({
       where: {
@@ -1448,43 +1652,21 @@ export class SolicitacaoFeriasService {
 
     const solicitacao = parcela.SolicitacaoFerias;
 
-    /*
-     * ================================
-     * Valida solicitação
-     * ================================
-     */
+    const statusSolicitacaoBloqueados = ['CANCELADO', 'REPROVADO', 'CONCLUIDO'];
 
-    if (
-      solicitacao.status !== 'APROVADO' &&
-      solicitacao.status !== 'EM_ANDAMENTO'
-    ) {
+    if (statusSolicitacaoBloqueados.includes(solicitacao.status)) {
       throw new BadRequestException(
-        'O documento só pode ser disponibilizado para uma solicitação aprovada.',
+        `Não é possível disponibilizar documentos para uma solicitação com status ${solicitacao.status}.`,
       );
     }
 
-    /*
-     * ================================
-     * Valida parcela
-     * ================================
-     */
-
-    if (
-      parcela.status === 'CANCELADO' ||
-      parcela.status === 'FERIAS_RETIRADAS'
-    ) {
+    if (parcela.status !== 'APROVADO') {
       throw new BadRequestException(
-        'Não é possível disponibilizar documento para esta parcela.',
+        `O período ${parcela.ordem} ainda não está aprovado. Status atual: ${parcela.status}.`,
       );
     }
 
-    /*
-     * ================================
-     * Verifica documento existente
-     * ================================
-     */
-
-    const documentoExistente = parcela.DocumentoFerias.find(
+    const documentoExistente = parcela.DocumentoFerias.some(
       (documento) => documento.tipoDocumento === 'AVISO_FERIAS',
     );
 
@@ -1494,118 +1676,240 @@ export class SolicitacaoFeriasService {
       );
     }
 
+    if (!arquivo.buffer) {
+      throw new BadRequestException(
+        'O conteúdo do arquivo não está disponível para armazenamento.',
+      );
+    }
+
+    // Validação adicional da assinatura do PDF.
+    if (
+      arquivo.buffer.length < 5 ||
+      arquivo.buffer.subarray(0, 5).toString('ascii') !== '%PDF-'
+    ) {
+      throw new BadRequestException(
+        'O arquivo enviado não possui uma estrutura inicial válida de PDF.',
+      );
+    }
+
+    const diretorio = join(process.cwd(), 'downloads', 'ferias', 'documentos');
+
+    const nomeArquivoSalvo = `${randomUUID()}.pdf`;
+
+    const caminhoArquivo = join(diretorio, nomeArquivoSalvo);
+
+    const arquivoUrl = `/downloads/ferias/documentos/${nomeArquivoSalvo}`;
+
+    await mkdir(diretorio, {
+      recursive: true,
+    });
+
+    await writeFile(caminhoArquivo, arquivo.buffer, {
+      flag: 'wx',
+    });
+
     /*
      * ================================
      * Transaction
      * ================================
      */
 
-    const documento = await this.prisma.$transaction(async (tx) => {
-      const novoDocumento = await tx.documentoFerias.create({
-        data: {
-          parcelaId: parcela.id,
+    try {
+      const documento = await this.prisma.$transaction(async (tx) => {
+        /*
+         * Revalida o status dentro da transação,
+         * evitando disponibilizações simultâneas.
+         */
 
-          tipoDocumento: 'AVISO_FERIAS',
-
-          nomeArquivo: body.nomeArquivo,
-
-          arquivoUrl: body.arquivoUrl,
-
-          mimeType: body.mimeType ?? null,
-
-          tamanho: body.tamanho ? Number(body.tamanho) : null,
-
-          geradoAutomaticamente: body.geradoAutomaticamente === true,
-
-          disponibilizadoEm: new Date(),
-
-          uploadedPorUsuario: user?.sam ?? null,
-
-          uploadedPorNome: user?.name ?? null,
-        },
-      });
-
-      await tx.parcelaFerias.update({
-        where: {
-          id: parcela.id,
-        },
-
-        data: {
-          status: 'DOCUMENTO_DISPONIVEL',
-        },
-      });
-
-      await tx.historicoSolicitacaoFerias.create({
-        data: {
-          solicitacaoId: solicitacao.id,
-
-          tipoEvento: 'DOCUMENTO_DISPONIBILIZADO',
-
-          descricao: `Documento de férias disponibilizado para o período ${parcela.ordem}.`,
-
-          statusAnterior: parcela.status,
-
-          statusNovo: 'DOCUMENTO_DISPONIVEL',
-
-          responsavelUsuario: user?.sam ?? null,
-
-          responsavelNome: user?.name ?? null,
-
-          responsavelEmail: user?.mail ?? null,
-
-          ipAddress: ip,
-
-          dadosAnteriores: {
-            parcelaId: parcela.id,
-
-            ordem: parcela.ordem,
-
-            status: parcela.status,
+        const parcelaAtual = await tx.parcelaFerias.findUnique({
+          where: {
+            id: parcela.id,
           },
 
-          dadosNovos: {
+          select: {
+            id: true,
+            ordem: true,
+            status: true,
+          },
+        });
+
+        if (!parcelaAtual || parcelaAtual.status !== 'APROVADO') {
+          throw new BadRequestException(
+            'A parcela não está mais disponível para receber o documento.',
+          );
+        }
+
+        const documentoJaRegistrado = await tx.documentoFerias.findFirst({
+          where: {
+            parcelaId: parcela.id,
+            tipoDocumento: 'AVISO_FERIAS',
+          },
+        });
+
+        if (documentoJaRegistrado) {
+          throw new BadRequestException(
+            'Já existe um documento de férias para esta parcela.',
+          );
+        }
+
+        const resultado = await tx.parcelaFerias.updateMany({
+          where: {
+            id: parcela.id,
+            status: 'APROVADO',
+          },
+
+          data: {
+            status: 'DOCUMENTO_DISPONIVEL',
+          },
+        });
+
+        if (resultado.count !== 1) {
+          throw new BadRequestException(
+            'A parcela teve seu status alterado. Atualize a página.',
+          );
+        }
+
+        /*
+         * Cria documento
+         */
+
+        const novoDocumento = await tx.documentoFerias.create({
+          data: {
             parcelaId: parcela.id,
 
-            ordem: parcela.ordem,
+            tipoDocumento: 'AVISO_FERIAS',
 
-            status: 'DOCUMENTO_DISPONIVEL',
+            nomeArquivo: arquivo.originalname,
 
-            documento: {
-              id: novoDocumento.id,
+            arquivoUrl,
 
-              nomeArquivo: novoDocumento.nomeArquivo,
+            mimeType: arquivo.mimetype,
 
-              tipoDocumento: novoDocumento.tipoDocumento,
+            tamanho: arquivo.size,
 
-              arquivoUrl: novoDocumento.arquivoUrl,
+            geradoAutomaticamente: false,
 
-              disponibilizadoEm: novoDocumento.disponibilizadoEm,
+            disponibilizadoEm: new Date(),
+
+            uploadedPorUsuario: user?.sam ?? null,
+
+            uploadedPorNome: user?.name ?? null,
+          },
+        });
+
+        /*
+         * Registra histórico
+         */
+
+        await tx.historicoSolicitacaoFerias.create({
+          data: {
+            solicitacaoId: solicitacao.id,
+
+            tipoEvento: 'DOCUMENTO_DISPONIBILIZADO',
+
+            descricao: `Documento de férias disponibilizado para o período ${parcela.ordem}.`,
+
+            statusAnterior: parcelaAtual.status,
+
+            statusNovo: 'DOCUMENTO_DISPONIVEL',
+
+            responsavelUsuario: user?.sam ?? null,
+
+            responsavelNome: user?.name ?? null,
+
+            responsavelEmail: user?.mail ?? null,
+
+            ipAddress: ip,
+
+            dadosAnteriores: {
+              parcelaId: parcela.id,
+              ordem: parcela.ordem,
+              status: parcelaAtual.status,
+            },
+
+            dadosNovos: {
+              parcelaId: parcela.id,
+              ordem: parcela.ordem,
+              status: 'DOCUMENTO_DISPONIVEL',
+
+              documento: {
+                id: novoDocumento.id,
+                nomeArquivo: novoDocumento.nomeArquivo,
+                tipoDocumento: novoDocumento.tipoDocumento,
+                arquivoUrl: novoDocumento.arquivoUrl,
+                disponibilizadoEm: novoDocumento.disponibilizadoEm,
+              },
             },
           },
-        },
+        });
+
+        return novoDocumento;
       });
 
-      return novoDocumento;
-    });
+      return {
+        message: 'Documento disponibilizado com sucesso.',
+        documento,
+      };
+    } catch (error) {
+      /*
+       * Remove o arquivo recém-gravado caso
+       * a transação não seja concluída.
+       */
 
-    return {
-      message: 'Documento disponibilizado com sucesso.',
+      try {
+        await unlink(caminhoArquivo);
+      } catch (erroLimpeza) {
+        console.error(
+          'Não foi possível remover o arquivo após falha na transação:',
+          erroLimpeza,
+        );
+      }
 
-      documento,
-    };
+      throw error;
+    }
   }
 
-  async enviarDocumentoAssinado(body: any, ip: string, user: any) {
-    if (!body?.parcelaId) {
+  async enviarDocumentoAssinado(
+    body: {
+      parcelaId: string;
+      arquivo: Express.Multer.File;
+    },
+    ip: string,
+    user: any,
+  ) {
+    const { parcelaId, arquivo } = body;
+
+    /*
+     * ================================
+     * Validações iniciais
+     * ================================
+     */
+
+    if (!parcelaId) {
       throw new BadRequestException('Parcela de férias é obrigatória.');
     }
 
-    if (!body?.nomeArquivo) {
-      throw new BadRequestException('Nome do arquivo é obrigatório.');
+    if (!arquivo) {
+      throw new BadRequestException('Documento assinado é obrigatório.');
     }
 
-    if (!body?.arquivoUrl) {
-      throw new BadRequestException('Arquivo assinado é obrigatório.');
+    const limite = 10 * 1024 * 1024;
+
+    if (arquivo.size > limite) {
+      throw new BadRequestException('O documento deve possuir no máximo 10MB.');
+    }
+
+    const extensao = extname(arquivo.originalname).toLowerCase();
+
+    if (
+      arquivo.mimetype !== 'application/pdf' ||
+      extensao !== '.pdf' ||
+      !arquivo.buffer ||
+      arquivo.buffer.subarray(0, 5).toString() !== '%PDF-'
+    ) {
+      throw new BadRequestException(
+        'O documento deve estar em formato PDF válido.',
+      );
     }
 
     /*
@@ -1630,7 +1934,7 @@ export class SolicitacaoFeriasService {
 
     const parcela = await this.prisma.parcelaFerias.findUnique({
       where: {
-        id: body.parcelaId,
+        id: parcelaId,
       },
 
       include: {
@@ -1668,7 +1972,7 @@ export class SolicitacaoFeriasService {
 
     /*
      * ================================
-     * Garante que é o próprio colaborador
+     * Valida titularidade
      * ================================
      */
 
@@ -1728,7 +2032,43 @@ export class SolicitacaoFeriasService {
       );
     }
 
+    /*
+     * ================================
+     * Prepara arquivo
+     * ================================
+     */
+
+    const nomeArquivo = `${randomUUID()}.pdf`;
+
+    const pastaRelativa = join('downloads', 'ferias', 'documentos');
+
+    const pastaDestino = join(process.cwd(), pastaRelativa);
+
+    const caminhoArquivo = join(pastaDestino, nomeArquivo);
+
+    const arquivoUrl = `/downloads/ferias/documentos/${nomeArquivo}`;
+
     const assinadoEm = new Date();
+
+    /*
+     * ================================
+     * Salva arquivo no servidor
+     * ================================
+     */
+
+    await mkdir(pastaDestino, {
+      recursive: true,
+    });
+
+    try {
+      await writeFile(caminhoArquivo, arquivo.buffer, { flag: 'wx' });
+    } catch (error) {
+      console.error('Erro ao salvar documento assinado:', error);
+
+      throw new InternalServerErrorException(
+        'Não foi possível salvar o documento assinado.',
+      );
+    }
 
     /*
      * ================================
@@ -1736,113 +2076,144 @@ export class SolicitacaoFeriasService {
      * ================================
      */
 
-    const documento = await this.prisma.$transaction(async (tx) => {
-      /*
-       * Cria documento assinado
-       */
-      const novoDocumento = await tx.documentoFerias.create({
-        data: {
-          parcelaId: parcela.id,
+    try {
+      const documento = await this.prisma.$transaction(async (tx) => {
+        /*
+         * Verifica novamente o status
+         * para evitar envios simultâneos.
+         */
 
-          tipoDocumento: 'AVISO_FERIAS_ASSINADO',
-
-          nomeArquivo: body.nomeArquivo,
-
-          arquivoUrl: body.arquivoUrl,
-
-          mimeType: body.mimeType ?? null,
-
-          tamanho: body.tamanho ? Number(body.tamanho) : null,
-
-          geradoAutomaticamente: false,
-
-          assinadoEm,
-
-          uploadedPorUsuario: usuarioAd,
-
-          uploadedPorNome: user?.name ?? colaborador.nome,
-        },
-      });
-
-      /*
-       * Atualiza parcela
-       */
-      await tx.parcelaFerias.update({
-        where: {
-          id: parcela.id,
-        },
-
-        data: {
-          status: 'DOCUMENTO_ASSINADO',
-        },
-      });
-
-      /*
-       * Histórico
-       */
-      await tx.historicoSolicitacaoFerias.create({
-        data: {
-          solicitacaoId: solicitacao.id,
-
-          tipoEvento: 'DOCUMENTO_ASSINADO',
-
-          descricao: `Documento assinado enviado pelo colaborador para o período ${parcela.ordem}.`,
-
-          statusAnterior: parcela.status,
-
-          statusNovo: 'DOCUMENTO_ASSINADO',
-
-          responsavelUsuario: usuarioAd,
-
-          responsavelNome: user?.name ?? colaborador.nome,
-
-          responsavelEmail: user?.mail ?? colaborador.email,
-
-          ipAddress: ip,
-
-          dadosAnteriores: {
-            parcelaId: parcela.id,
-
-            ordem: parcela.ordem,
-
-            status: parcela.status,
-
-            documentoOriginal: {
-              id: documentoOriginal.id,
-
-              nomeArquivo: documentoOriginal.nomeArquivo,
+        const atualizacao = await tx.parcelaFerias.updateMany({
+          where: {
+            id: parcela.id,
+            status: 'DOCUMENTO_DISPONIVEL',
+            DocumentoFerias: {
+              none: {
+                tipoDocumento: 'AVISO_FERIAS_ASSINADO',
+              },
             },
           },
-
-          dadosNovos: {
-            parcelaId: parcela.id,
-
-            ordem: parcela.ordem,
-
+          data: {
             status: 'DOCUMENTO_ASSINADO',
+          },
+        });
 
-            documentoAssinado: {
-              id: novoDocumento.id,
+        if (atualizacao.count !== 1) {
+          throw new BadRequestException(
+            'Esta parcela já foi atualizada ou não permite mais o envio do documento assinado.',
+          );
+        }
 
-              nomeArquivo: novoDocumento.nomeArquivo,
+        /*
+         * Cria documento assinado
+         */
 
-              tipoDocumento: novoDocumento.tipoDocumento,
+        const novoDocumento = await tx.documentoFerias.create({
+          data: {
+            parcelaId: parcela.id,
 
-              arquivoUrl: novoDocumento.arquivoUrl,
+            tipoDocumento: 'AVISO_FERIAS_ASSINADO',
 
-              assinadoEm: novoDocumento.assinadoEm,
+            nomeArquivo: arquivo.originalname,
+
+            arquivoUrl,
+
+            mimeType: 'application/pdf',
+
+            tamanho: arquivo.size,
+
+            geradoAutomaticamente: false,
+
+            assinadoEm,
+
+            uploadedPorUsuario: usuarioAd,
+
+            uploadedPorNome: user?.name ?? colaborador.nome,
+          },
+        });
+
+        /*
+         * Registra histórico
+         */
+
+        await tx.historicoSolicitacaoFerias.create({
+          data: {
+            solicitacaoId: solicitacao.id,
+
+            tipoEvento: 'DOCUMENTO_ASSINADO',
+
+            descricao:
+              `Documento assinado enviado pelo colaborador ` +
+              `para o período ${parcela.ordem}.`,
+
+            statusAnterior: parcela.status,
+
+            statusNovo: 'DOCUMENTO_ASSINADO',
+
+            responsavelUsuario: usuarioAd,
+
+            responsavelNome: user?.name ?? colaborador.nome,
+
+            responsavelEmail: user?.mail ?? colaborador.email,
+
+            ipAddress: ip,
+
+            dadosAnteriores: {
+              parcelaId: parcela.id,
+
+              ordem: parcela.ordem,
+
+              status: parcela.status,
+
+              documentoOriginal: {
+                id: documentoOriginal.id,
+                nomeArquivo: documentoOriginal.nomeArquivo,
+              },
+            },
+
+            dadosNovos: {
+              parcelaId: parcela.id,
+
+              ordem: parcela.ordem,
+
+              status: 'DOCUMENTO_ASSINADO',
+
+              documentoAssinado: {
+                id: novoDocumento.id,
+
+                nomeArquivo: novoDocumento.nomeArquivo,
+
+                tipoDocumento: novoDocumento.tipoDocumento,
+
+                arquivoUrl: novoDocumento.arquivoUrl,
+
+                assinadoEm: novoDocumento.assinadoEm,
+              },
             },
           },
-        },
+        });
+
+        return novoDocumento;
       });
 
-      return novoDocumento;
-    });
+      return {
+        message: 'Documento assinado enviado com sucesso.',
 
-    return {
-      message: 'Documento assinado enviado com sucesso.',
+        documento,
+      };
+    } catch (error) {
+      /*
+       * Remove o arquivo caso
+       * a transaction falhe.
+       */
 
-      documento,
-    };
+      try {
+        await unlink(caminhoArquivo);
+      } catch (unlinkError) {
+        console.error('Erro ao remover arquivo após falha:', unlinkError);
+      }
+
+      throw error;
+    }
   }
 }

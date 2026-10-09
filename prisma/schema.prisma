@@ -324,6 +324,9 @@ model UsuarioChat {
   dataNascimento                         DateTime?                                @db.Date
   dataDemissao                           DateTime?                                @db.Date
   tipoContratacao                        TipoContratacao?
+  gestorEmail                            String?
+  gestorNome                             String?
+  gestorUsuario                          String?
   Conversa                               Conversa[]
   DashboardAcesso                        DashboardAcesso[]
   Mensagem                               Mensagem[]
@@ -335,6 +338,7 @@ model UsuarioChat {
   @@index([email])
   @@index([nome])
   @@index([usuario])
+  @@index([gestorUsuario])
 }
 
 model DashboardAcesso {
@@ -1176,18 +1180,22 @@ model HistoricoSolicitacaoFerias {
 }
 
 model ParcelaFerias {
-  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  solicitacaoId     String              @db.Uuid
-  ordem             Int
-  quantidadeDias    Int
-  dataInicio        DateTime            @db.Date
-  dataFim           DateTime            @db.Date
-  dataRetorno       DateTime            @db.Date
-  status            StatusParcelaFerias @default(AGUARDANDO_APROVACAO)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @default(now()) @db.Timestamp(6)
-  DocumentoFerias   DocumentoFerias[]
-  SolicitacaoFerias SolicitacaoFerias   @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  solicitacaoId      String              @db.Uuid
+  ordem              Int
+  quantidadeDias     Int
+  dataInicio         DateTime            @db.Date
+  dataFim            DateTime            @db.Date
+  dataRetorno        DateTime            @db.Date
+  status             StatusParcelaFerias @default(AGUARDANDO_APROVACAO)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @default(now()) @db.Timestamp(6)
+  aprovadoEm         DateTime?
+  aprovadoPorEmail   String?
+  aprovadoPorNome    String?
+  aprovadoPorUsuario String?
+  DocumentoFerias    DocumentoFerias[]
+  SolicitacaoFerias  SolicitacaoFerias   @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
 
   @@unique([solicitacaoId, ordem])
   @@index([dataFim])
@@ -1372,6 +1380,7 @@ enum StatusParcelaFerias {
   EM_FERIAS
   FERIAS_RETIRADAS
   CANCELADO
+  APROVADO_PARCIALMENTE
 }
 
 enum StatusPeriodoAquisitivoFerias {
@@ -1390,6 +1399,7 @@ enum StatusSolicitacaoFerias {
   CANCELADO
   EM_ANDAMENTO
   CONCLUIDO
+  APROVADO_PARCIALMENTE
 }
 
 enum TipoContratacao {

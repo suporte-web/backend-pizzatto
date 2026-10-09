@@ -1,13 +1,26 @@
 import { AuthGuard } from '@/auth/auth.guard';
 import { ClientIp } from '@/decorator/client-ip.decorator';
 import { User } from '@/decorator/user.decorator';
-import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  FileTypeValidator,
+  Get,
+  Headers,
+  MaxFileSizeValidator,
+  ParseFilePipe,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PeriodoAquisitivoFeriasService } from './periodoAquisitivoFerias.service';
 import { SolicitacaoFeriasService } from './solicitacaoFerias.service';
 import { StatusFeriasService } from './statusFerias.service';
 import { AlertasFeriasService } from './alertasFerias.service';
 import { FeriasEmailService } from './feriasEmail.service';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Férias')
 @Controller('ferias')
@@ -65,7 +78,7 @@ export class FeriasController {
     authorization: string,
   ) {
     return await this.solicitacaoService.aprovarSolicitacao(
-      body.solicitacaoId,
+      body.parcelaId,
       ip,
       user,
       authorization,
@@ -85,32 +98,88 @@ export class FeriasController {
   }
 
   @Post('parcela/documento/disponibilizar')
+  @UseInterceptors(
+    FileInterceptor('arquivo', {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Disponibiliza documento de férias para uma parcela',
+    summary: 'Disponibiliza documento PDF para uma parcela de férias',
   })
   async disponibilizarDocumento(
-    @Body() body: any,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 10 * 1024 * 1024,
+          }),
+          new FileTypeValidator({
+            fileType: 'application/pdf',
+          }),
+        ],
+        fileIsRequired: true,
+      }),
+    )
+    arquivo: Express.Multer.File,
+
+    @Body('parcelaId') parcelaId: string,
+
     @ClientIp() ip: string,
+
     @User() user: any,
   ) {
-    return await this.solicitacaoService.disponibilizarDocumento(
-      body,
+    return this.solicitacaoService.disponibilizarDocumento(
+      {
+        parcelaId,
+        arquivo,
+      },
       ip,
       user,
     );
   }
 
   @Post('parcela/documento/assinado')
+  @UseInterceptors(
+    FileInterceptor('arquivo', {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Envia o documento de férias assinado pelo colaborador',
   })
   async enviarDocumentoAssinado(
-    @Body() body: any,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 10 * 1024 * 1024,
+          }),
+          new FileTypeValidator({
+            fileType: 'application/pdf',
+          }),
+        ],
+        fileIsRequired: true,
+      }),
+    )
+    arquivo: Express.Multer.File,
+
+    @Body('parcelaId') parcelaId: string,
+
     @ClientIp() ip: string,
+
     @User() user: any,
   ) {
     return await this.solicitacaoService.enviarDocumentoAssinado(
-      body,
+      {
+        parcelaId,
+        arquivo,
+      },
       ip,
       user,
     );
@@ -138,5 +207,13 @@ export class FeriasController {
   })
   async findPeriodosDisponiveis(@User() user: any) {
     return await this.periodoService.findDisponiveis(user);
+  }
+
+  @Post('equipe/find-by-filter')
+  @ApiOperation({
+    summary: 'Lista períodos aquisitivos dos colaboradores da equipe do gestor',
+  })
+  async findByFilterEquipe(@Body() body: any, @User() user: any) {
+    return this.periodoService.findByFilterEquipe(body, user);
   }
 }

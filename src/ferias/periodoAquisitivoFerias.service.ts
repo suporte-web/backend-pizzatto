@@ -1,5 +1,6 @@
 import { PrismaService } from '@/prisma/prisma.service';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 
 @Injectable()
 export class PeriodoAquisitivoFeriasService {
@@ -55,28 +56,8 @@ export class PeriodoAquisitivoFeriasService {
 
     const hoje = this.inicioDoDiaUtc(new Date());
 
-    /*
-     * O módulo passa a considerar períodos
-     * que ainda tenham período concessivo
-     * alcançando 2027.
-     *
-     * Ou seja:
-     *
-     * concessivo terminou em 2026
-     * -> ignora
-     *
-     * concessivo termina em 2027+
-     * -> considera
-     */
     const inicioModulo = new Date(Date.UTC(2027, 0, 1));
 
-    /*
-     * Continuamos gerando até o próximo
-     * ano para já deixar o próximo período
-     * preparado.
-     *
-     * Em 2026 -> até 2027.
-     */
     const anoMaximoAquisicao = Math.max(2027, hoje.getUTCFullYear() + 1);
 
     for (const usuario of usuarios) {
@@ -94,14 +75,6 @@ export class PeriodoAquisitivoFeriasService {
       let dataInicioAquisitivo = dataAdmissao;
 
       while (true) {
-        /*
-         * Exemplo:
-         *
-         * início = 20/10/2025
-         *
-         * + 1 ano = 20/10/2026
-         * - 1 dia = 19/10/2026
-         */
         const dataFimAquisitivo = this.adicionarDias(
           this.adicionarAnos(dataInicioAquisitivo, 1),
           -1,
@@ -109,61 +82,21 @@ export class PeriodoAquisitivoFeriasService {
 
         const anoVigencia = dataFimAquisitivo.getUTCFullYear();
 
-        /*
-         * Evita gerar períodos
-         * indefinidamente para frente.
-         */
         if (anoVigencia > anoMaximoAquisicao) {
           break;
         }
 
-        /*
-         * Se o funcionário foi desligado
-         * antes do início deste período,
-         * não existem períodos seguintes.
-         */
         if (dataDemissao && dataInicioAquisitivo >= dataDemissao) {
           break;
         }
 
-        /*
-         * O direito fica disponível
-         * no dia seguinte ao fim
-         * do período aquisitivo.
-         *
-         * Exemplo:
-         *
-         * fim aquisição:
-         * 19/10/2026
-         *
-         * disponível:
-         * 20/10/2026
-         */
         const dataDisponibilidade = this.adicionarDias(dataFimAquisitivo, 1);
 
-        /*
-         * Período concessivo:
-         *
-         * 20/10/2026
-         * até
-         * 19/10/2027
-         *
-         * Utilizamos -1 dia porque
-         * trabalhamos com intervalos
-         * inclusivos.
-         */
         const dataLimiteConcessivo = this.adicionarDias(
           this.adicionarAnos(dataDisponibilidade, 1),
           -1,
         );
 
-        /*
-         * Agora a regra correta:
-         *
-         * ignoramos somente períodos cujo
-         * prazo concessivo inteiro terminou
-         * antes de 2027.
-         */
         if (dataLimiteConcessivo < inicioModulo) {
           ignorados++;
 
@@ -172,13 +105,6 @@ export class PeriodoAquisitivoFeriasService {
           continue;
         }
 
-        /*
-         * Antes da dataDisponibilidade:
-         * EM_AQUISICAO
-         *
-         * Na dataDisponibilidade ou depois:
-         * DISPONIVEL
-         */
         const statusCalculado =
           hoje >= dataDisponibilidade ? 'DISPONIVEL' : 'EM_AQUISICAO';
 
@@ -193,16 +119,6 @@ export class PeriodoAquisitivoFeriasService {
         });
 
         if (existente) {
-          /*
-           * Só fazemos automaticamente:
-           *
-           * EM_AQUISICAO
-           *       ↓
-           * DISPONIVEL
-           *
-           * Não alteramos PROGRAMADO,
-           * EM_ANDAMENTO, CONCLUIDO etc.
-           */
           if (
             existente.status === 'EM_AQUISICAO' &&
             statusCalculado === 'DISPONIVEL'
@@ -215,12 +131,6 @@ export class PeriodoAquisitivoFeriasService {
               data: {
                 status: 'DISPONIVEL',
 
-                /*
-                 * Também garante que as
-                 * datas estejam corretas
-                 * caso tenhamos ajustado
-                 * a regra posteriormente.
-                 */
                 dataInicioAquisitivo,
                 dataFimAquisitivo,
                 dataLimiteConcessivo,
@@ -257,15 +167,6 @@ export class PeriodoAquisitivoFeriasService {
           criados++;
         }
 
-        /*
-         * Próximo período aquisitivo.
-         *
-         * 20/10/2025 -> 19/10/2026
-         *
-         * próximo:
-         *
-         * 20/10/2026 -> 19/10/2027
-         */
         dataInicioAquisitivo = this.adicionarDias(dataFimAquisitivo, 1);
       }
     }
@@ -355,6 +256,165 @@ export class PeriodoAquisitivoFeriasService {
       result: periodos,
 
       total: periodos.length,
+    };
+  }
+
+  async findByFilterEquipe(body: any, user: any) {
+    const gestorSam = String(user?.sam ?? '')
+      .trim()
+      .toLowerCase();
+
+    if (!gestorSam) {
+      throw new BadRequestException(
+        'Não foi possível identificar o usuário autenticado.',
+      );
+    }
+
+    const page = Number(body?.page ?? 1);
+    const limit = Number(body?.limit ?? 10);
+
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    ) {
+      throw new BadRequestException(
+        'Paginação inválida. Informe page >= 1 e limit entre 1 e 100.',
+      );
+    }
+
+    const skip = (page - 1) * limit;
+
+    const pesquisa = String(body?.pesquisa ?? '').trim();
+
+    // Identifica os colaboradores vinculados ao gestor
+    // por meio das solicitações de férias existentes.
+    const colaboradoresEquipe = await this.prisma.solicitacaoFerias.findMany({
+      where: {
+        gestorUsuario: {
+          equals: gestorSam,
+          mode: 'insensitive',
+        },
+      },
+
+      select: {
+        PeriodoAquisitivoFerias: {
+          select: {
+            usuarioId: true,
+          },
+        },
+      },
+
+      distinct: ['periodoAquisitivoId'],
+    });
+
+    const usuarioIds = [
+      ...new Set(
+        colaboradoresEquipe
+          .map((solicitacao) => solicitacao.PeriodoAquisitivoFerias?.usuarioId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    if (usuarioIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const where: Prisma.PeriodoAquisitivoFeriasWhereInput = {
+      usuarioId: {
+        in: usuarioIds,
+      },
+
+      UsuarioChat: {
+        is: {
+          ativo: true,
+
+          ...(pesquisa
+            ? {
+                nome: {
+                  contains: pesquisa,
+                  mode: 'insensitive',
+                },
+              }
+            : {}),
+        },
+      },
+    };
+
+    const [total, periodos] = await this.prisma.$transaction([
+      this.prisma.periodoAquisitivoFerias.count({
+        where,
+      }),
+
+      this.prisma.periodoAquisitivoFerias.findMany({
+        where,
+
+        skip,
+        take: limit,
+
+        orderBy: [
+          {
+            UsuarioChat: {
+              nome: 'asc',
+            },
+          },
+          {
+            anoVigencia: 'desc',
+          },
+          {
+            id: 'asc',
+          },
+        ],
+
+        select: {
+          id: true,
+          usuarioId: true,
+          anoVigencia: true,
+
+          dataInicioAquisitivo: true,
+          dataFimAquisitivo: true,
+          dataLimiteConcessivo: true,
+
+          quantidadeDiasDireito: true,
+          diasUtilizados: true,
+          diasVendidos: true,
+
+          status: true,
+
+          UsuarioChat: {
+            select: {
+              id: true,
+              nome: true,
+              usuario: true,
+              cargo: true,
+              empresa: true,
+              tipoContratacao: true,
+              dataAdmissao: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: periodos,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 }
