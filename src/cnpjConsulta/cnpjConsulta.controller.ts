@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFiles,
   UseGuards,
@@ -93,10 +94,17 @@ export class CnpjConsultaController {
 
   @Get('find-by-cnpj/:cnpj')
   @ApiOperation({
-    summary: 'Buscar o histórico de consultas de um CNPJ',
+    summary: 'Buscar histórico de consultas pelo CNPJ',
   })
-  async findByCnpj(@Param('cnpj') cnpj: string) {
-    return this.cnpjConsultaService.findByCnpj(cnpj);
+  async findByCnpj(
+    @Param('cnpj') cnpj: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.cnpjConsultaService.findByCnpj(cnpj, {
+      page,
+      limit,
+    });
   }
 
   @Patch('update/:id')
@@ -123,5 +131,13 @@ export class CnpjConsultaController {
   @Get('find-all-avaliacoes-certidoes-federais')
   async findAllAvaliacoesCertidoesFederais() {
     return this.cnpjConsultaService.findAllAvaliacoesCertidoesFederais();
+  }
+
+  @Post('find-by-filter-agrupado')
+  @ApiOperation({
+    summary: 'Listar empresas sem duplicidade de CNPJ',
+  })
+  async findByFilterAgrupado(@Body() body: any) {
+    return this.cnpjConsultaService.findByFilterAgrupado(body);
   }
 }

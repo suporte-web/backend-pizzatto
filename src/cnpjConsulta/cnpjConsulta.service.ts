@@ -2189,24 +2189,83 @@ export class CnpjConsultaService {
     return this.normalizarConsulta(consulta);
   }
 
-  async findByCnpj(cnpj: string) {
+  async findByCnpj(cnpj: string, body: any = {}) {
     const cnpjLimpo = this.limparCnpj(cnpj);
 
     if (!this.validarCnpj(cnpjLimpo)) {
       throw new BadRequestException('O CNPJ informado é inválido.');
     }
 
-    const consultas = await this.prisma.cnpjConsulta.findMany({
-      where: {
-        cnpj: cnpjLimpo,
-      },
-      include: this.getIncludeCompleto(),
-      orderBy: {
-        consultadoEm: 'desc',
-      },
-    });
+    const page = Math.max(Number(body?.page) || 1, 1);
 
-    return consultas.map((consulta) => this.normalizarConsulta(consulta));
+    const limit = Math.min(Math.max(Number(body?.limit) || 10, 1), 100);
+
+    const skip = (page - 1) * limit;
+
+    try {
+      const where = {
+        cnpj: cnpjLimpo,
+      };
+
+      const [registros, total] = await this.prisma.$transaction([
+        this.prisma.cnpjConsulta.findMany({
+          where,
+
+          include: this.getIncludeCompleto(),
+
+          orderBy: [
+            {
+              consultadoEm: 'desc',
+            },
+            {
+              id: 'desc',
+            },
+          ],
+
+          skip,
+          take: limit,
+        }),
+
+        this.prisma.cnpjConsulta.count({
+          where,
+        }),
+      ]);
+
+      if (total === 0) {
+        throw new NotFoundException(
+          'Nenhuma consulta encontrada para este CNPJ.',
+        );
+      }
+
+      const result = registros.map((registro) =>
+        this.normalizarConsulta(registro),
+      );
+
+      return {
+        cnpj: cnpjLimpo,
+
+        result,
+        data: result,
+        total,
+
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      console.error('[CNPJ] Erro ao buscar histórico:', error);
+
+      throw new BadRequestException(
+        'Não foi possível consultar o histórico do CNPJ.',
+      );
+    }
   }
 
   async update(id: string, body: any) {
@@ -2565,5 +2624,184 @@ export class CnpjConsultaService {
     );
 
     return avaliacoesSemDuplicidade.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }
+
+  async findByFilterAgrupado(body: any) {
+    const pesquisa = String(body?.pesquisa ?? '').trim();
+
+    const page = Math.max(Number(body?.page) || 1, 1);
+
+    const limit = Math.min(Math.max(Number(body?.limit) || 10, 1), 100);
+
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (pesquisa) {
+      const cnpjPesquisa = this.limparCnpj(pesquisa);
+
+      where.OR = [
+        ...(cnpjPesquisa
+          ? [
+              {
+                cnpj: {
+                  contains: cnpjPesquisa,
+                },
+              },
+            ]
+          : []),
+
+        {
+          CnpjDadosConsultados: {
+            is: {
+              razaoSocial: {
+                contains: pesquisa,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+
+        {
+          CnpjDadosConsultados: {
+            is: {
+              nomeFantasia: {
+                contains: pesquisa,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+
+        {
+          CnpjDadosConsultados: {
+            is: {
+              consultadoPorNome: {
+                contains: pesquisa,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+      ];
+    }
+
+    try {
+      const agrupamentos = await this.prisma.cnpjConsulta.groupBy({
+        by: ['cnpj'],
+
+        where,
+
+        _count: {
+          _all: true,
+        },
+
+        _max: {
+          consultadoEm: true,
+        },
+
+        orderBy: [
+          {
+            _max: {
+              consultadoEm: 'desc',
+            },
+          },
+          {
+            cnpj: 'asc',
+          },
+        ],
+
+        skip,
+
+        take: limit,
+      });
+
+      const totalAgrupamentos = await this.prisma.cnpjConsulta.groupBy({
+        by: ['cnpj'],
+        where,
+      });
+
+      const cnpjs = agrupamentos.map((item) => item.cnpj);
+
+      const registros = cnpjs.length
+        ? await this.prisma.cnpjConsulta.findMany({
+            where: {
+              AND: [
+                where,
+                {
+                  cnpj: {
+                    in: cnpjs,
+                  },
+                },
+              ],
+            },
+
+            include: this.getIncludeCompleto(),
+
+            orderBy: [
+              {
+                consultadoEm: 'desc',
+              },
+              {
+                id: 'desc',
+              },
+            ],
+          })
+        : [];
+
+      const consultasPorCnpj = new Map<string, any>();
+
+      for (const registro of registros) {
+        if (!consultasPorCnpj.has(registro.cnpj)) {
+          consultasPorCnpj.set(
+            registro.cnpj,
+            this.normalizarConsulta(registro),
+          );
+        }
+      }
+
+      const result = agrupamentos
+        .map((agrupamento) => {
+          const consulta = consultasPorCnpj.get(agrupamento.cnpj);
+
+          if (!consulta) {
+            return null;
+          }
+
+          return {
+            ...consulta,
+
+            totalConsultas: agrupamento._count._all,
+
+            ultimaConsultaEm: agrupamento._max.consultadoEm,
+          };
+        })
+        .filter((item) => item !== null);
+
+      const total = totalAgrupamentos.length;
+
+      return {
+        result,
+        total,
+        data: result,
+
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      console.error('[CNPJ] Erro ao listar CNPJs agrupados:', error);
+
+      throw new BadRequestException(
+        'Não foi possível listar os CNPJs agrupados.',
+      );
+    }
   }
 }
