@@ -389,12 +389,80 @@ export class CnpjConsultaService {
     }
   }
 
+  private async fetchJsonComRetry(url: string, tentativas = 3): Promise<any> {
+    let ultimoErro: any;
+
+    for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+      try {
+        return await this.fetchJson(url, {}, 20000);
+      } catch (error: any) {
+        ultimoErro = error;
+
+        const status = Number(error?.status);
+
+        const podeTentarNovamente =
+          [429, 500, 502, 503, 504].includes(status) ||
+          error?.code === 'EXTERNAL_TIMEOUT';
+
+        if (!podeTentarNovamente || tentativa === tentativas) {
+          throw error;
+        }
+
+        const espera = Math.min(1000 * 2 ** (tentativa - 1), 5000);
+
+        console.warn(
+          `[BrasilAPI] HTTP ${status || 'timeout'} - tentativa ${tentativa}/${tentativas}. Aguardando ${espera}ms.`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, espera));
+      }
+    }
+
+    throw ultimoErro;
+  }
+
+  private cacheEmpresaReferencia: {
+    cnpj: string;
+    dados: Record<string, any>;
+    expiraEm: number;
+  } | null = null;
+
+  private async consultarEmpresaReferencia(
+    cnpj: string,
+  ): Promise<ResultadoFonte<Record<string, any>>> {
+    const agora = Date.now();
+
+    if (
+      this.cacheEmpresaReferencia &&
+      this.cacheEmpresaReferencia.cnpj === cnpj &&
+      this.cacheEmpresaReferencia.expiraEm > agora
+    ) {
+      return this.resultadoFonte(
+        'Consulta cadastral (CACHE)',
+        'SUCESSO',
+        this.cacheEmpresaReferencia.dados,
+      );
+    }
+
+    const resultado = await this.consultarReceitaComFallback(cnpj);
+
+    if (resultado.status === 'SUCESSO' && resultado.dados) {
+      this.cacheEmpresaReferencia = {
+        cnpj,
+        dados: resultado.dados,
+        expiraEm: agora + 24 * 60 * 60 * 1000,
+      };
+    }
+
+    return resultado;
+  }
+
   private async consultarReceita(
     cnpj: string,
   ): Promise<ResultadoFonte<Record<string, any>>> {
     try {
       const url = `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`;
-      const dados = await this.fetchJson(url);
+      const dados = await this.fetchJsonComRetry(url);
 
       if (!dados?.razao_social) {
         return this.resultadoFonte<Record<string, any>>(
@@ -421,7 +489,12 @@ export class CnpjConsultaService {
       const status = Number(error?.status);
 
       if (status === 404) {
-        throw new NotFoundException('CNPJ não encontrado na base consultada.');
+        return this.resultadoFonte<Record<string, any>>(
+          'BrasilAPI / Receita Federal',
+          'ERRO',
+          null,
+          'CNPJ não encontrado nesta fonte (HTTP 404).',
+        );
       }
 
       if (status === 400) {
@@ -432,11 +505,268 @@ export class CnpjConsultaService {
 
       return this.resultadoFonte<Record<string, any>>(
         'BrasilAPI / Receita Federal',
-        status === 429 || status >= 500 ? 'INDISPONIVEL' : 'ERRO',
+        status === 429 || status >= 500 || error?.code === 'EXTERNAL_TIMEOUT'
+          ? 'INDISPONIVEL'
+          : 'ERRO',
         null,
         error?.message || 'Não foi possível consultar os dados cadastrais.',
       );
     }
+  }
+
+  /** Mantém o contrato de dados utilizado pelo frontend e pelo Prisma. */
+  private normalizarDadosCadastrais(
+    dados: Record<string, any>,
+  ): Record<string, any> {
+    const situacao =
+      dados.descricao_situacao_cadastral ??
+      (dados.situacao_cadastral === 2 ? 'ATIVA' : null);
+    const simples = dados.opcao_pelo_simples;
+
+    return {
+      ...dados,
+      descricao_situacao_cadastral: situacao,
+      cnaes_secundarios: Array.isArray(dados.cnaes_secundarios)
+        ? dados.cnaes_secundarios
+        : [],
+      qsa: Array.isArray(dados.qsa) ? dados.qsa : [],
+      simplesStatus:
+        simples === true ? 'SIM' : simples === false ? 'NÃO' : 'NÃO INFORMADO',
+      ie: dados.ie ?? null,
+    };
+  }
+
+  private async consultarMinhaReceita(
+    cnpj: string,
+  ): Promise<ResultadoFonte<Record<string, any>>> {
+    const fonte = 'Minha Receita';
+    try {
+      const dados = await this.fetchJson(
+        `https://minhareceita.org/${cnpj}`,
+        {},
+        15000,
+      );
+      if (!dados || typeof dados !== 'object' || !dados.razao_social) {
+        return this.resultadoFonte<Record<string, any>>(
+          fonte,
+          'ERRO',
+          null,
+          'A Minha Receita não retornou dados cadastrais válidos.',
+        );
+      }
+      if (this.limparCnpj(dados.cnpj) !== cnpj) {
+        return this.resultadoFonte<Record<string, any>>(
+          fonte,
+          'ERRO',
+          null,
+          'O CNPJ retornado não corresponde ao solicitado.',
+        );
+      }
+      return this.resultadoFonte(
+        fonte,
+        'SUCESSO',
+        this.normalizarDadosCadastrais(dados),
+      );
+    } catch (error: any) {
+      const status = Number(error?.status);
+      console.warn('[Minha Receita] Falha:', {
+        cnpj,
+        status: status || null,
+        mensagem: error?.message,
+      });
+      return this.resultadoFonte<Record<string, any>>(
+        fonte,
+        status === 404 || status === 400 ? 'ERRO' : 'INDISPONIVEL',
+        null,
+        error?.message ?? 'Não foi possível consultar a Minha Receita.',
+      );
+    }
+  }
+
+  /** Converte a resposta da CNPJ.ws para o contrato da BrasilAPI. */
+  private normalizarCnpjWs(dados: Record<string, any>, cnpj: string) {
+    const estabelecimento = dados.estabelecimento ?? {};
+    const empresa = dados.empresa ?? {};
+    const principal = estabelecimento.atividade_principal ?? {};
+    const secundarios = Array.isArray(estabelecimento.atividades_secundarias)
+      ? estabelecimento.atividades_secundarias
+      : [];
+    const socios = Array.isArray(empresa.socios)
+      ? empresa.socios
+      : Array.isArray(dados.socios)
+        ? dados.socios
+        : [];
+    const simples = empresa.simples ?? dados.simples ?? {};
+    const opcaoSimples = this.booleanNullable(
+      simples.simples ?? simples.optante ?? dados.opcao_pelo_simples,
+    );
+    const opcaoMei = this.booleanNullable(simples.mei ?? dados.opcao_pelo_mei);
+    const natureza = empresa.natureza_juridica ?? dados.natureza_juridica;
+    const porte = empresa.porte ?? dados.porte;
+    const situacao = estabelecimento.situacao_cadastral;
+    const inscricoes = Array.isArray(estabelecimento.inscricoes_estaduais)
+      ? estabelecimento.inscricoes_estaduais
+      : [];
+    const ie =
+      inscricoes.find((item: any) => item?.ativo)?.inscricao_estadual ??
+      inscricoes[0]?.inscricao_estadual ??
+      null;
+
+    return this.normalizarDadosCadastrais({
+      cnpj,
+      razao_social: empresa.razao_social ?? dados.razao_social,
+      nome_fantasia:
+        estabelecimento.nome_fantasia ?? dados.nome_fantasia ?? null,
+      data_inicio_atividade: estabelecimento.data_inicio_atividade ?? null,
+      descricao_situacao_cadastral:
+        (typeof situacao === 'object' ? situacao?.nome : situacao) ?? null,
+      data_situacao_cadastral: estabelecimento.data_situacao_cadastral ?? null,
+      descricao_motivo_situacao_cadastral:
+        estabelecimento.motivo_situacao_cadastral?.descricao ?? null,
+      cnae_fiscal: principal.id ?? principal.codigo ?? null,
+      cnae_fiscal_descricao: principal.descricao ?? null,
+      cnaes_secundarios: secundarios
+        .map((item: any) => ({
+          codigo: item?.id ?? item?.codigo ?? null,
+          descricao: item?.descricao ?? '',
+        }))
+        .filter((item: any) => item.codigo && item.descricao),
+      qsa: socios.map((socio: any) => ({
+        nome_socio: socio?.nome ?? socio?.nome_socio ?? '',
+        qualificacao_socio:
+          socio?.qualificacao_socio?.descricao ??
+          socio?.qualificacao?.descricao ??
+          socio?.qualificacao ??
+          null,
+        codigo_qualificacao_socio:
+          socio?.qualificacao_socio?.id ?? socio?.qualificacao?.id ?? null,
+        data_entrada_sociedade:
+          socio?.data_entrada ?? socio?.data_entrada_sociedade ?? null,
+        pais: socio?.pais?.nome ?? socio?.pais ?? null,
+      })),
+      natureza_juridica:
+        (typeof natureza === 'object' ? natureza?.descricao : natureza) ?? null,
+      codigo_natureza_juridica:
+        (typeof natureza === 'object' ? natureza?.id : null) ?? null,
+      porte: (typeof porte === 'object' ? porte?.descricao : porte) ?? null,
+      descricao_porte:
+        (typeof porte === 'object' ? porte?.descricao : porte) ?? null,
+      capital_social: empresa.capital_social ?? dados.capital_social ?? null,
+      descricao_identificador_matriz_filial: estabelecimento.tipo ?? null,
+      pais: estabelecimento.pais?.nome ?? null,
+      email: estabelecimento.email ?? null,
+      ddd_telefone_1:
+        [estabelecimento.ddd1, estabelecimento.telefone1]
+          .filter(Boolean)
+          .join('') || null,
+      ddd_telefone_2:
+        [estabelecimento.ddd2, estabelecimento.telefone2]
+          .filter(Boolean)
+          .join('') || null,
+      logradouro: estabelecimento.logradouro ?? null,
+      numero: estabelecimento.numero ?? null,
+      complemento: estabelecimento.complemento ?? null,
+      bairro: estabelecimento.bairro ?? null,
+      municipio: estabelecimento.cidade?.nome ?? estabelecimento.cidade ?? null,
+      uf: estabelecimento.estado?.sigla ?? estabelecimento.estado ?? null,
+      cep: estabelecimento.cep ?? null,
+      opcao_pelo_simples: opcaoSimples,
+      opcao_pelo_mei: opcaoMei,
+      data_opcao_pelo_simples: simples.data_opcao_simples ?? null,
+      data_exclusao_do_simples: simples.data_exclusao_simples ?? null,
+      data_opcao_pelo_mei: simples.data_opcao_mei ?? null,
+      data_exclusao_do_mei: simples.data_exclusao_mei ?? null,
+      ie,
+    });
+  }
+
+  private async consultarCnpjWs(
+    cnpj: string,
+  ): Promise<ResultadoFonte<Record<string, any>>> {
+    const fonte = 'CNPJ.ws';
+    try {
+      const dados = await this.fetchJson(
+        `https://publica.cnpj.ws/cnpj/${cnpj}`,
+        {},
+        15000,
+      );
+      const retornado = this.limparCnpj(
+        dados?.estabelecimento?.cnpj ?? dados?.cnpj,
+      );
+      if (
+        !dados ||
+        retornado !== cnpj ||
+        !(dados?.razao_social || dados?.empresa?.razao_social)
+      ) {
+        return this.resultadoFonte<Record<string, any>>(
+          fonte,
+          'ERRO',
+          null,
+          'A CNPJ.ws retornou dados incompletos ou de outro CNPJ.',
+        );
+      }
+      const normalizados = this.normalizarCnpjWs(dados, cnpj);
+      if (!normalizados.cnae_fiscal || !normalizados.uf) {
+        return this.resultadoFonte<Record<string, any>>(
+          fonte,
+          'ERRO',
+          null,
+          'A CNPJ.ws não retornou CNAE principal ou UF necessários à análise.',
+        );
+      }
+      return this.resultadoFonte(fonte, 'SUCESSO', normalizados);
+    } catch (error: any) {
+      const status = Number(error?.status);
+      console.warn('[CNPJ.ws] Falha:', {
+        cnpj,
+        status: status || null,
+        mensagem: error?.message,
+      });
+      return this.resultadoFonte<Record<string, any>>(
+        fonte,
+        status === 400 || status === 404 ? 'ERRO' : 'INDISPONIVEL',
+        null,
+        error?.message ?? 'Não foi possível consultar a CNPJ.ws.',
+      );
+    }
+  }
+
+  private async consultarReceitaComFallback(
+    cnpj: string,
+  ): Promise<ResultadoFonte<Record<string, any>>> {
+    const principal = await this.consultarReceita(cnpj);
+    if (principal.status === 'SUCESSO' && principal.dados) return principal;
+
+    console.warn('[CNPJ] BrasilAPI falhou. Tentando Minha Receita.', {
+      cnpj,
+      status: principal.status,
+      erro: principal.erro ?? null,
+    });
+    const alternativa = await this.consultarMinhaReceita(cnpj);
+    if (alternativa.status === 'SUCESSO' && alternativa.dados)
+      return alternativa;
+
+    console.warn('[CNPJ] Minha Receita falhou. Tentando CNPJ.ws.', {
+      cnpj,
+      status: alternativa.status,
+      erro: alternativa.erro ?? null,
+    });
+    const terceira = await this.consultarCnpjWs(cnpj);
+    if (terceira.status === 'SUCESSO' && terceira.dados) {
+      console.log('[CNPJ] Consulta concluída via CNPJ.ws.', { cnpj });
+      return terceira;
+    }
+
+    throw new ServiceUnavailableException({
+      message:
+        'Não foi possível confirmar os dados cadastrais em nenhuma das três fontes.',
+      cnpj,
+      consultas: {
+        brasilApi: principal,
+        minhaReceita: alternativa,
+        cnpjWs: terceira,
+      },
+    });
   }
 
   private consultarSimples(
@@ -452,7 +782,7 @@ export class CnpjConsultaService {
     }
 
     return this.resultadoFonte(
-      'BrasilAPI / dados do Simples Nacional',
+      `${receita.fonte} / dados do Simples Nacional`,
       'SUCESSO',
       {
         optanteSimples: receita.dados.opcao_pelo_simples ?? null,
@@ -1428,7 +1758,15 @@ export class CnpjConsultaService {
     /*
      * Empresa que está sendo consultada.
      */
-    const receita = await this.consultarReceita(cnpjLimpo);
+    const receita = await this.consultarReceitaComFallback(cnpjLimpo);
+
+    // console.log('[CNPJ] Resultado da consulta:', {
+    //   cnpj: cnpjLimpo,
+    //   status: receita.status,
+    //   fonte: receita.fonte,
+    //   erro: receita.erro ?? null,
+    //   razaoSocial: receita.dados?.razao_social ?? null,
+    // });
 
     if (receita.status !== 'SUCESSO' || !receita.dados) {
       throw new ServiceUnavailableException({
@@ -1446,10 +1784,6 @@ export class CnpjConsultaService {
 
     const uf = receita.dados?.uf;
 
-    /*
-     * CNPJ da empresa usada como referência
-     * para comparação de nicho.
-     */
     const cnpjReferencia = String(
       process.env.CNPJ_EMPRESA_REFERENCIA ?? '',
     ).replace(/\D/g, '');
@@ -1466,10 +1800,15 @@ export class CnpjConsultaService {
       );
     }
 
-    /*
-     * Busca os dados cadastrais da empresa de referência.
-     */
-    const empresaReferencia = await this.consultarReceita(cnpjReferencia);
+    const empresaReferencia =
+      await this.consultarEmpresaReferencia(cnpjReferencia);
+
+    // console.log('[CNPJ] Empresa de referência:', {
+    //   cnpj: cnpjReferencia,
+    //   status: empresaReferencia.status,
+    //   erro: empresaReferencia.erro ?? null,
+    //   razaoSocial: empresaReferencia.dados?.razao_social ?? null,
+    // });
 
     if (empresaReferencia.status !== 'SUCESSO' || !empresaReferencia.dados) {
       throw new ServiceUnavailableException(
