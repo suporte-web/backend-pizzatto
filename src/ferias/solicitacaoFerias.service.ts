@@ -418,6 +418,9 @@ export class SolicitacaoFeriasService {
           equals: usuarioAd,
           mode: 'insensitive',
         },
+        status: {
+          in: ['AGUARDANDO_APROVACAO', 'APROVADO_PARCIALMENTE'],
+        },
       });
     }
 
