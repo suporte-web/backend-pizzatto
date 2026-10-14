@@ -410,9 +410,9 @@ export class CnpjConsultaService {
 
         const espera = Math.min(1000 * 2 ** (tentativa - 1), 5000);
 
-        console.warn(
-          `[BrasilAPI] HTTP ${status || 'timeout'} - tentativa ${tentativa}/${tentativas}. Aguardando ${espera}ms.`,
-        );
+        // console.warn(
+        //   `[BrasilAPI] HTTP ${status || 'timeout'} - tentativa ${tentativa}/${tentativas}. Aguardando ${espera}ms.`,
+        // );
 
         await new Promise((resolve) => setTimeout(resolve, espera));
       }
@@ -569,11 +569,11 @@ export class CnpjConsultaService {
       );
     } catch (error: any) {
       const status = Number(error?.status);
-      console.warn('[Minha Receita] Falha:', {
-        cnpj,
-        status: status || null,
-        mensagem: error?.message,
-      });
+      // console.warn('[Minha Receita] Falha:', {
+      //   cnpj,
+      //   status: status || null,
+      //   mensagem: error?.message,
+      // });
       return this.resultadoFonte<Record<string, any>>(
         fonte,
         status === 404 || status === 400 ? 'ERRO' : 'INDISPONIVEL',
@@ -717,11 +717,11 @@ export class CnpjConsultaService {
       return this.resultadoFonte(fonte, 'SUCESSO', normalizados);
     } catch (error: any) {
       const status = Number(error?.status);
-      console.warn('[CNPJ.ws] Falha:', {
-        cnpj,
-        status: status || null,
-        mensagem: error?.message,
-      });
+      // console.warn('[CNPJ.ws] Falha:', {
+      //   cnpj,
+      //   status: status || null,
+      //   mensagem: error?.message,
+      // });
       return this.resultadoFonte<Record<string, any>>(
         fonte,
         status === 400 || status === 404 ? 'ERRO' : 'INDISPONIVEL',
@@ -737,23 +737,23 @@ export class CnpjConsultaService {
     const principal = await this.consultarReceita(cnpj);
     if (principal.status === 'SUCESSO' && principal.dados) return principal;
 
-    console.warn('[CNPJ] BrasilAPI falhou. Tentando Minha Receita.', {
-      cnpj,
-      status: principal.status,
-      erro: principal.erro ?? null,
-    });
+    // console.warn('[CNPJ] BrasilAPI falhou. Tentando Minha Receita.', {
+    //   cnpj,
+    //   status: principal.status,
+    //   erro: principal.erro ?? null,
+    // });
     const alternativa = await this.consultarMinhaReceita(cnpj);
     if (alternativa.status === 'SUCESSO' && alternativa.dados)
       return alternativa;
 
-    console.warn('[CNPJ] Minha Receita falhou. Tentando CNPJ.ws.', {
-      cnpj,
-      status: alternativa.status,
-      erro: alternativa.erro ?? null,
-    });
+    // console.warn('[CNPJ] Minha Receita falhou. Tentando CNPJ.ws.', {
+    //   cnpj,
+    //   status: alternativa.status,
+    //   erro: alternativa.erro ?? null,
+    // });
     const terceira = await this.consultarCnpjWs(cnpj);
     if (terceira.status === 'SUCESSO' && terceira.dados) {
-      console.log('[CNPJ] Consulta concluída via CNPJ.ws.', { cnpj });
+      // console.log('[CNPJ] Consulta concluída via CNPJ.ws.', { cnpj });
       return terceira;
     }
 
@@ -1044,12 +1044,12 @@ export class CnpjConsultaService {
     } catch (error: any) {
       const status = Number(error?.status);
 
-      console.error('[Reclame AQUI Data Hub] Erro', {
-        cnpj: cnpjLimpo,
-        status,
-        message: error?.message,
-        responseBody: error?.responseBody ?? null,
-      });
+      // console.error('[Reclame AQUI Data Hub] Erro', {
+      //   cnpj: cnpjLimpo,
+      //   status,
+      //   message: error?.message,
+      //   responseBody: error?.responseBody ?? null,
+      // });
 
       if (status === 401 || status === 403) {
         return this.resultadoFonte<Record<string, any>>(
@@ -2284,10 +2284,10 @@ export class CnpjConsultaService {
         throw error;
       }
 
-      console.error('[CNPJ] Erro ao salvar consulta', {
-        message: error?.message,
-        code: error?.code,
-      });
+      // console.error('[CNPJ] Erro ao salvar consulta', {
+      //   message: error?.message,
+      //   code: error?.code,
+      // });
 
       throw new BadRequestException(
         error?.message || 'Não foi possível salvar a consulta do CNPJ.',
