@@ -2616,6 +2616,7 @@ export class CnpjConsultaService {
       avaliacaoCertidoesFederais,
       observacao,
       dados,
+      certidoes,
     } = body;
 
     if (
@@ -2623,11 +2624,16 @@ export class CnpjConsultaService {
       resultado === undefined &&
       avaliacaoCertidoesFederais === undefined &&
       observacao === undefined &&
-      dados === undefined
+      dados === undefined &&
+      certidoes === undefined
     ) {
       throw new BadRequestException(
         'Nenhuma informação foi enviada para atualização.',
       );
+    }
+
+    if (certidoes !== undefined && !Array.isArray(certidoes)) {
+      throw new BadRequestException('O campo certidoes deve ser um array.');
     }
 
     try {
@@ -2842,6 +2848,104 @@ export class CnpjConsultaService {
             if (socios.length > 0) {
               await transaction.cnpjSocio.createMany({
                 data: socios,
+              });
+            }
+          }
+        }
+
+        // ATUALIZAÇÃO DAS CERTIDÕES JÁ CADASTRADAS
+        if (certidoes !== undefined) {
+          const idsRecebidos = new Set<string>();
+
+          for (const certidao of certidoes) {
+            const certidaoId = String(certidao?.id ?? '').trim();
+
+            if (!certidaoId) {
+              throw new BadRequestException(
+                'O ID da certidão é obrigatório para atualização.',
+              );
+            }
+
+            if (idsRecebidos.has(certidaoId)) {
+              throw new BadRequestException(
+                `A certidão ${certidaoId} foi enviada mais de uma vez.`,
+              );
+            }
+
+            idsRecebidos.add(certidaoId);
+
+            const certidaoAtual = await transaction.cnpjCertidao.findFirst({
+              where: {
+                id: certidaoId,
+                consultaId: id,
+              },
+            });
+
+            if (!certidaoAtual) {
+              throw new BadRequestException(
+                `A certidão ${certidaoId} não pertence a esta consulta ou não foi encontrada.`,
+              );
+            }
+
+            const atualizacaoCertidao: any = {};
+
+            // TIPO DA CERTIDÃO
+            if (certidao.tipo !== undefined) {
+              const tipo = String(certidao.tipo ?? '').trim();
+
+              if (!tipo) {
+                throw new BadRequestException(
+                  'O tipo da certidão não pode ficar vazio.',
+                );
+              }
+
+              atualizacaoCertidao.tipo = tipo;
+            }
+
+            // DATA DE EMISSÃO
+            if (certidao.emitidaEm !== undefined) {
+              atualizacaoCertidao.emitidaEm = this.converterData(
+                certidao.emitidaEm,
+                'A data de emissão da certidão',
+              );
+            }
+
+            // DATA DE VALIDADE
+            if (certidao.validaAte !== undefined) {
+              atualizacaoCertidao.validaAte = this.converterData(
+                certidao.validaAte,
+                'A data de validade da certidão',
+              );
+            }
+
+            // VALIDAÇÃO DAS DATAS
+            const emitidaEm =
+              atualizacaoCertidao.emitidaEm !== undefined
+                ? atualizacaoCertidao.emitidaEm
+                : certidaoAtual.emitidaEm;
+
+            const validaAte =
+              atualizacaoCertidao.validaAte !== undefined
+                ? atualizacaoCertidao.validaAte
+                : certidaoAtual.validaAte;
+
+            if (
+              emitidaEm &&
+              validaAte &&
+              new Date(validaAte).getTime() < new Date(emitidaEm).getTime()
+            ) {
+              throw new BadRequestException(
+                `A validade da certidão ${certidaoId} não pode ser anterior à emissão.`,
+              );
+            }
+
+            // ATUALIZA SOMENTE OS CAMPOS ENVIADOS
+            if (Object.keys(atualizacaoCertidao).length > 0) {
+              await transaction.cnpjCertidao.update({
+                where: {
+                  id: certidaoId,
+                },
+                data: atualizacaoCertidao,
               });
             }
           }
