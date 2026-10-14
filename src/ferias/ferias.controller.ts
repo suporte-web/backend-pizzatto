@@ -97,6 +97,18 @@ export class FeriasController {
     return await this.solicitacaoService.updateSolicitacao(body, ip, user);
   }
 
+  @Post('solicitacao/cancelar')
+  @ApiOperation({
+    summary: 'Altera uma solicitação de férias pelo RH',
+  })
+  async cancelarSolicitacao(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.solicitacaoService.cancelarSolicitacao(body, ip, user);
+  }
+
   @Post('parcela/documento/disponibilizar')
   @UseInterceptors(
     FileInterceptor('arquivo', {

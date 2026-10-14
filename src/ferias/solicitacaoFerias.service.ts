@@ -1395,7 +1395,7 @@ export class SolicitacaoFeriasService {
     const roles = Array.isArray(user?.roles) ? user.roles : [];
 
     const podeCancelar =
-      roles.includes('PESSOAS_E_CULTURA') || roles.includes('ADMIN');
+      roles.includes('DEPARTAMENTO_PESSOAL') || roles.includes('DESENVOLVIMENTO');
 
     if (!podeCancelar) {
       throw new ForbiddenException(
