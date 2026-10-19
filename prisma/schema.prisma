@@ -768,18 +768,19 @@ model MuralImagem {
 }
 
 model CnpjConsulta {
-  id                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   cnpj                       String
-  consultadoEm               DateTime              @default(now()) @db.Timestamp(6)
-  pontuacao                  Int                   @default(0)
-  resultado                  ResultadoHomologacao  @default(ANALISE_MANUAL)
+  consultadoEm               DateTime                 @default(now()) @db.Timestamp(6)
+  pontuacao                  Int                      @default(0)
+  resultado                  ResultadoHomologacao     @default(ANALISE_MANUAL)
   observacao                 String?
-  createdAt                  DateTime              @default(now()) @db.Timestamp(6)
-  updatedAt                  DateTime              @default(now()) @db.Timestamp(6)
+  createdAt                  DateTime                 @default(now()) @db.Timestamp(6)
+  updatedAt                  DateTime                 @default(now()) @db.Timestamp(6)
   classificacao              String?
   avaliacaoCertidoesFederais String?
   CnpjCertidao               CnpjCertidao[]
   CnpjDadosConsultados       CnpjDadosConsultados?
+  CnpjSimplesVerificacao     CnpjSimplesVerificacao[]
 
   @@index([cnpj])
   @@index([consultadoEm])
@@ -827,6 +828,9 @@ model CnpjDadosConsultados {
   telefone1               String?
   telefone2               String?
   regimeTributario        RegimeTributarioCnpj @default(NAO_IDENTIFICADO)
+  fonteSimples            String?
+  simplesConsultadoEm     DateTime?            @db.Timestamp(6)
+  verificacaoSimples      String?
   CnpjCnaeSecundario      CnpjCnaeSecundario[]
   CnpjConsulta            CnpjConsulta         @relation(fields: [consultaId], references: [id], onDelete: Cascade)
   CnpjSocio               CnpjSocio[]
@@ -1257,6 +1261,25 @@ model SolicitacaoFerias {
   @@index([createdAt])
   @@index([periodoAquisitivoId])
   @@index([status])
+}
+
+model CnpjSimplesVerificacao {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  consultaId     String?       @db.Uuid
+  cnpj           String        @db.VarChar(14)
+  optanteSimples Boolean?
+  optanteMei     Boolean?
+  fonte          String
+  confirmadoEm   DateTime      @db.Timestamp(6)
+  confirmadoPor  String
+  evidenciaUrl   String?
+  observacao     String?
+  createdAt      DateTime      @default(now()) @db.Timestamp(6)
+  CnpjConsulta   CnpjConsulta? @relation(fields: [consultaId], references: [id])
+
+  @@index([cnpj, confirmadoEm])
+  @@index([confirmadoEm])
+  @@index([consultaId])
 }
 
 enum Area {

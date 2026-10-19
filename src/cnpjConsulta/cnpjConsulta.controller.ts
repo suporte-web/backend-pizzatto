@@ -22,6 +22,7 @@ import { mkdirSync } from 'node:fs';
 import { diskStorage } from 'multer';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { User } from '@/decorator/user.decorator';
 
 @ApiTags('CNPJ Consulta')
 @Controller('cnpj-consultas')
@@ -139,5 +140,21 @@ export class CnpjConsultaController {
   })
   async findByFilterAgrupado(@Body() body: any) {
     return this.cnpjConsultaService.findByFilterAgrupado(body);
+  }
+
+  @Post('simples/confirmar')
+  @ApiOperation({
+    summary: 'Registrar confirmação manual do Simples Nacional',
+  })
+  async confirmarSimples(@Body() body: any, @User() user: any) {
+    return this.cnpjConsultaService.confirmarSimples(body, user);
+  }
+
+  @Get('simples/ultima-verificacao/:cnpj')
+  @ApiOperation({
+    summary: 'Consultar a última confirmação oficial do Simples Nacional',
+  })
+  async findUltimaVerificacaoSimples(@Param('cnpj') cnpj: string) {
+    return this.cnpjConsultaService.findUltimaVerificacaoSimples(cnpj);
   }
 }

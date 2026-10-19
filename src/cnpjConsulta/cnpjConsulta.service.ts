@@ -1,6 +1,7 @@
 import { PrismaService } from '@/prisma/prisma.service';
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   Injectable,
   NotFoundException,
@@ -14,6 +15,7 @@ import * as path from 'path';
 
 import { CnpjNichoValidator } from './validators/cnpj-nicho.validator';
 import { RegimeTributarioCnpj } from '../../generated/prisma/enums';
+import { CnpjSimplesService } from './cnpj-simples.service';
 
 export type FonteStatus =
   | 'SUCESSO'
@@ -34,6 +36,7 @@ export interface ConsultaCnpjAgregada {
   data: Record<string, any>;
   consultas: {
     receita: ResultadoFonte<Record<string, any>>;
+    minhaReceita: ResultadoFonte<Record<string, any>>;
     simples: ResultadoFonte<Record<string, any>>;
     reclameAqui: ResultadoFonte<Record<string, any>>;
     datajud: ResultadoFonte<Record<string, any>>;
@@ -54,7 +57,10 @@ interface PortalCertidaoEstadual {
 
 @Injectable()
 export class CnpjConsultaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cnpjSimplesService: CnpjSimplesService,
+  ) {}
 
   private limparCnpj(cnpj: unknown): string {
     return String(cnpj ?? '').replace(/\D/g, '');
@@ -1174,42 +1180,49 @@ export class CnpjConsultaService {
 
     const dados = receita.dados;
 
-    // 1. MEI
-    if (dados.opcao_pelo_mei === true) {
+    const optanteSimples = this.booleanNullable(dados.opcao_pelo_simples);
+
+    const optanteMei = this.booleanNullable(dados.opcao_pelo_mei);
+
+    if (optanteMei === true) {
       return RegimeTributarioCnpj.MEI;
     }
 
-    // 2. Simples Nacional
-    if (dados.opcao_pelo_simples === true) {
+    if (optanteSimples === true) {
       return RegimeTributarioCnpj.SIMPLES_NACIONAL;
     }
 
-    // 3. Lucro Real / Presumido / Arbitrado
-    if (
-      Array.isArray(dados.regime_tributario) &&
-      dados.regime_tributario.length > 0
-    ) {
-      const regimesValidos = dados.regime_tributario
-        .filter((item: any) => item && item.ano && item.forma_de_tributacao)
-        .sort((a: any, b: any) => Number(b.ano) - Number(a.ano));
+    const regimes = Array.isArray(dados.regime_tributario)
+      ? [...dados.regime_tributario]
+      : [];
 
-      const regimeMaisRecente = regimesValidos[0];
+    const regimesValidos = regimes
+      .filter(
+        (item: any) =>
+          item &&
+          Number.isInteger(Number(item.ano)) &&
+          item.forma_de_tributacao,
+      )
+      .sort((a: any, b: any) => Number(b.ano) - Number(a.ano));
 
-      if (regimeMaisRecente) {
-        const formaTributacao = String(regimeMaisRecente.forma_de_tributacao)
-          .trim()
-          .toUpperCase();
+    const regimeMaisRecente = regimesValidos[0];
 
-        switch (formaTributacao) {
-          case 'LUCRO REAL':
-            return RegimeTributarioCnpj.LUCRO_REAL;
+    if (regimeMaisRecente) {
+      const forma = String(regimeMaisRecente.forma_de_tributacao)
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase();
 
-          case 'LUCRO PRESUMIDO':
-            return RegimeTributarioCnpj.LUCRO_PRESUMIDO;
+      switch (forma) {
+        case 'LUCRO REAL':
+          return RegimeTributarioCnpj.LUCRO_REAL;
 
-          case 'LUCRO ARBITRADO':
-            return RegimeTributarioCnpj.LUCRO_ARBITRADO;
-        }
+        case 'LUCRO PRESUMIDO':
+          return RegimeTributarioCnpj.LUCRO_PRESUMIDO;
+
+        case 'LUCRO ARBITRADO':
+          return RegimeTributarioCnpj.LUCRO_ARBITRADO;
       }
     }
 
@@ -1760,13 +1773,26 @@ export class CnpjConsultaService {
      */
     const receita = await this.consultarReceitaComFallback(cnpjLimpo);
 
-    // console.log('[CNPJ] Resultado da consulta:', {
-    //   cnpj: cnpjLimpo,
-    //   status: receita.status,
-    //   fonte: receita.fonte,
-    //   erro: receita.erro ?? null,
-    //   razaoSocial: receita.dados?.razao_social ?? null,
-    // });
+    const minhaReceita =
+      receita.fonte === 'Minha Receita'
+        ? receita
+        : await this.consultarMinhaReceita(cnpjLimpo);
+
+    const dadosMinhaReceita =
+      minhaReceita.status === 'SUCESSO' && minhaReceita.dados
+        ? minhaReceita.dados
+        : null;
+
+    const historicoRegimeTributario = Array.isArray(
+      dadosMinhaReceita?.regime_tributario,
+    )
+      ? dadosMinhaReceita.regime_tributario
+      : [];
+
+    const ultimoRegimeTributario =
+      [...historicoRegimeTributario]
+        .filter((item) => Number.isFinite(Number(item?.ano)))
+        .sort((a, b) => Number(b.ano) - Number(a.ano))[0] ?? null;
 
     if (receita.status !== 'SUCESSO' || !receita.dados) {
       throw new ServiceUnavailableException({
@@ -1778,9 +1804,83 @@ export class CnpjConsultaService {
       });
     }
 
-    const simples = this.consultarSimples(receita);
+    const dadosTributarios = {
+      ...receita.dados,
 
-    const regimeTributario = this.identificarRegimeTributario(receita);
+      opcao_pelo_simples:
+        dadosMinhaReceita?.opcao_pelo_simples ??
+        receita.dados.opcao_pelo_simples ??
+        null,
+
+      opcao_pelo_mei:
+        dadosMinhaReceita?.opcao_pelo_mei ??
+        receita.dados.opcao_pelo_mei ??
+        null,
+
+      data_opcao_pelo_simples:
+        dadosMinhaReceita?.data_opcao_pelo_simples ??
+        receita.dados.data_opcao_pelo_simples ??
+        null,
+
+      data_exclusao_do_simples:
+        dadosMinhaReceita?.data_exclusao_do_simples ??
+        receita.dados.data_exclusao_do_simples ??
+        null,
+
+      regime_tributario:
+        historicoRegimeTributario.length > 0
+          ? historicoRegimeTributario
+          : (receita.dados.regime_tributario ?? []),
+    };
+
+    const resultadoSimples = await this.cnpjSimplesService.consultar(
+      cnpjLimpo,
+      receita.dados,
+      receita.fonte,
+      dadosMinhaReceita,
+    );
+
+    const ultimaVerificacaoOficial =
+      await this.prisma.cnpjSimplesVerificacao.findFirst({
+        where: {
+          cnpj: cnpjLimpo,
+          fonte: 'PORTAL_SIMPLES_NACIONAL',
+        },
+        orderBy: [{ confirmadoEm: 'desc' }, { createdAt: 'desc' }],
+      });
+
+    const simples = this.resultadoFonte(
+      'Consulta híbrida do Simples Nacional',
+      'SUCESSO',
+      {
+        ...resultadoSimples,
+
+        observacao:
+          'Situação tributária consultada por APIs externas. ' +
+          'Os resultados não representam confirmação automática ' +
+          'pelo portal oficial do Simples Nacional.',
+      },
+    );
+
+    const possuiDivergencia =
+      resultadoSimples.verificacao === 'DIVERGENCIA_ENTRE_FONTES';
+
+    const receitaComSimples: ResultadoFonte<Record<string, any>> = {
+      ...receita,
+      dados: {
+        ...dadosTributarios,
+
+        opcao_pelo_simples: possuiDivergencia
+          ? null
+          : resultadoSimples.optanteSimples,
+
+        opcao_pelo_mei: possuiDivergencia ? null : resultadoSimples.optanteMei,
+      },
+    };
+
+    const regimeTributario = possuiDivergencia
+      ? RegimeTributarioCnpj.NAO_IDENTIFICADO
+      : this.identificarRegimeTributario(receitaComSimples);
 
     const uf = receita.dados?.uf;
 
@@ -1863,13 +1963,51 @@ export class CnpjConsultaService {
 
       data: {
         ...receita.dados,
-
         classificacaoNicho,
         regimeTributario,
+
+        opcao_pelo_simples: possuiDivergencia
+          ? null
+          : resultadoSimples.optanteSimples,
+
+        opcao_pelo_mei: possuiDivergencia ? null : resultadoSimples.optanteMei,
+
+        simplesStatus:
+          resultadoSimples.optanteSimples === true
+            ? 'SIM'
+            : resultadoSimples.optanteSimples === false
+              ? 'NÃO'
+              : 'NÃO INFORMADO',
+
+        ultimaVerificacaoOficial: ultimaVerificacaoOficial
+          ? {
+              id: ultimaVerificacaoOficial.id,
+              optanteSimples: ultimaVerificacaoOficial.optanteSimples,
+              optanteMei: ultimaVerificacaoOficial.optanteMei,
+              fonte: ultimaVerificacaoOficial.fonte,
+              confirmadoEm: ultimaVerificacaoOficial.confirmadoEm,
+              confirmadoPor: ultimaVerificacaoOficial.confirmadoPor,
+              evidenciaUrl: ultimaVerificacaoOficial.evidenciaUrl,
+            }
+          : null,
+        verificacaoSimples: resultadoSimples.verificacao,
+        fonteSimples: resultadoSimples.fonte,
+        requerConfirmacaoOficial: resultadoSimples.requerConfirmacaoOficial,
+        regimeTributarioHistorico:
+          ultimoRegimeTributario?.forma_de_tributacao ?? null,
+
+        anoReferenciaRegimeTributario: ultimoRegimeTributario?.ano ?? null,
+
+        historicoRegimeTributario,
+
+        fonteRegimeTributarioHistorico: ultimoRegimeTributario
+          ? 'Minha Receita / ECF'
+          : null,
       },
 
       consultas: {
         receita,
+        minhaReceita,
         simples,
         reclameAqui,
         datajud,
@@ -2095,6 +2233,19 @@ export class CnpjConsultaService {
 
             opcaoPeloMei: this.booleanNullable(
               dados.opcaoPeloMei ?? respostaOriginal.opcao_pelo_mei,
+            ),
+
+            fonteSimples: this.textoNullable(
+              dados.fonteSimples ?? respostaOriginal.fonteSimples,
+            ),
+
+            verificacaoSimples: this.textoNullable(
+              dados.verificacaoSimples ?? respostaOriginal.verificacaoSimples,
+            ),
+
+            simplesConsultadoEm: this.converterData(
+              dados.simplesConsultadoEm ?? respostaOriginal.simplesConsultadoEm,
+              'A data da consulta do Simples Nacional',
             ),
 
             regimeTributario: this.validarRegimeTributario(
@@ -2701,6 +2852,8 @@ export class CnpjConsultaService {
             'bairro',
             'municipio',
             'uf',
+            'fonteSimples',
+            'verificacaoSimples',
           ];
 
           for (const campo of camposTexto) {
@@ -2747,6 +2900,13 @@ export class CnpjConsultaService {
 
           if (dados.opcaoPeloMei !== undefined) {
             atualizacao.opcaoPeloMei = this.booleanNullable(dados.opcaoPeloMei);
+          }
+
+          if (dados.simplesConsultadoEm !== undefined) {
+            atualizacao.simplesConsultadoEm = this.converterData(
+              dados.simplesConsultadoEm,
+              'A data da consulta do Simples Nacional',
+            );
           }
 
           if (dados.regimeTributario !== undefined) {
@@ -3246,5 +3406,145 @@ export class CnpjConsultaService {
         'Não foi possível listar os CNPJs agrupados.',
       );
     }
+  }
+
+  async confirmarSimples(body: any, user: any) {
+    const cnpj = String(body?.cnpj ?? '').replace(/\D/g, '');
+
+    if (!/^\d{14}$/.test(cnpj)) {
+      throw new BadRequestException('Informe um CNPJ válido com 14 dígitos.');
+    }
+
+    const validarBooleano = (valor: unknown, campo: string): boolean | null => {
+      if (valor === undefined || valor === null || valor === '') {
+        return null;
+      }
+
+      if (typeof valor !== 'boolean') {
+        throw new BadRequestException(
+          `O campo ${campo} deve ser true, false ou null.`,
+        );
+      }
+
+      return valor;
+    };
+
+    const optanteSimples = validarBooleano(
+      body?.optanteSimples,
+      'optanteSimples',
+    );
+
+    const optanteMei = validarBooleano(body?.optanteMei, 'optanteMei');
+
+    if (optanteSimples === null && optanteMei === null) {
+      throw new BadRequestException(
+        'Informe pelo menos uma situação tributária para confirmar.',
+      );
+    }
+
+    if (optanteMei === true && optanteSimples === false) {
+      throw new BadRequestException(
+        'Não é permitido confirmar MEI como optante e Simples Nacional como não optante.',
+      );
+    }
+
+    const consultaId = body?.consultaId ? String(body.consultaId).trim() : null;
+
+    if (consultaId) {
+      const consulta = await this.prisma.cnpjConsulta.findUnique({
+        where: { id: consultaId },
+        select: {
+          id: true,
+          cnpj: true,
+        },
+      });
+
+      if (!consulta) {
+        throw new NotFoundException('Consulta de CNPJ não encontrada.');
+      }
+
+      if (consulta.cnpj.replace(/\D/g, '') !== cnpj) {
+        throw new BadRequestException(
+          'O CNPJ informado não corresponde à consulta selecionada.',
+        );
+      }
+    }
+
+    // A autenticação não substitui a autorização.
+    // Substitua esta condição pela regra de permissões
+    // efetivamente utilizada no seu sistema.
+    if (!user) {
+      throw new ForbiddenException(
+        'Usuário não autorizado a confirmar a situação tributária.',
+      );
+    }
+
+    const confirmadoPor =
+      user.samAccountName ?? user.sam ?? user.usuario ?? user.username ?? null;
+
+    if (!confirmadoPor) {
+      throw new BadRequestException(
+        'Não foi possível identificar o usuário responsável.',
+      );
+    }
+
+    const fonte = String(body?.fonte ?? 'PORTAL_SIMPLES_NACIONAL').trim();
+
+    const evidenciaUrl =
+      typeof body?.evidenciaUrl === 'string'
+        ? body.evidenciaUrl.trim() || null
+        : null;
+
+    const observacao =
+      typeof body?.observacao === 'string'
+        ? body.observacao.trim() || null
+        : null;
+
+    const verificacao = await this.prisma.cnpjSimplesVerificacao.create({
+      data: {
+        cnpj,
+        consultaId,
+        optanteSimples,
+        optanteMei,
+        fonte,
+        confirmadoEm: new Date(),
+        confirmadoPor: String(confirmadoPor),
+        evidenciaUrl,
+        observacao,
+      },
+    });
+
+    return {
+      message: 'Confirmação do Simples Nacional registrada com sucesso.',
+      verificacao,
+    };
+  }
+
+  async findUltimaVerificacaoSimples(cnpj: string) {
+    const cnpjLimpo = String(cnpj ?? '').replace(/\D/g, '');
+
+    if (!/^\d{14}$/.test(cnpjLimpo)) {
+      throw new BadRequestException('Informe um CNPJ válido com 14 dígitos.');
+    }
+
+    const verificacao = await this.prisma.cnpjSimplesVerificacao.findFirst({
+      where: {
+        cnpj: cnpjLimpo,
+      },
+      orderBy: [
+        {
+          confirmadoEm: 'desc',
+        },
+        {
+          createdAt: 'desc',
+        },
+      ],
+    });
+
+    return {
+      cnpj: cnpjLimpo,
+      possuiVerificacaoOficial: verificacao !== null,
+      ultimaVerificacao: verificacao,
+    };
   }
 }
