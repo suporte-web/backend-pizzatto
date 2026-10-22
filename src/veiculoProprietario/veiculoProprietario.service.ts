@@ -13,8 +13,8 @@ export class VeiculoProprietarioService {
 
   private readonly logger = new Logger(VeiculoProprietarioService.name);
 
-  // @Cron('0 0 6 * * 1', {
-  @Cron('30 * * * * *', {
+  @Cron('0 0 6 * * 1', {
+  // @Cron('30 * * * * *', {
     name: 'sincronizar-veiculos-proprietarios',
     timeZone: 'America/Sao_Paulo',
     waitForCompletion: true,
