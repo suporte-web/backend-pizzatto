@@ -35,6 +35,7 @@ import { SaudeEmDiaModule } from './saudeEmDia/saudeEmDia.module';
 import { SegurancaEmAcaoModule } from './segurancaEmAcao/segurancaEmAcao.module';
 import { FeriadosModule } from './feriados/feriados.module';
 import { FeriasModule } from './ferias/ferias.module';
+import { VeiculoProprietarioModule } from './veiculoProprietario/veiculoProprietario.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { FeriasModule } from './ferias/ferias.module';
     SegurancaEmAcaoModule,
     FeriadosModule,
     FeriasModule,
+    VeiculoProprietarioModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

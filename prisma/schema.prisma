@@ -1282,6 +1282,18 @@ model CnpjSimplesVerificacao {
   @@index([consultaId])
 }
 
+model VeiculoProprietario {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  placa                String   @unique
+  nome                 String
+  cnpjCpf              String
+  modalidade           String?
+  situacao             String?
+  createdAt            DateTime @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime @default(now()) @db.Timestamp(6)
+  classificacaoVeiculo String?
+}
+
 enum Area {
   Sistemas
   Infra
