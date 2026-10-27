@@ -3356,10 +3356,20 @@ export class CnpjConsultaService {
 
       for (const registro of registros) {
         if (!consultasPorCnpj.has(registro.cnpj)) {
-          consultasPorCnpj.set(
-            registro.cnpj,
-            this.normalizarConsulta(registro),
-          );
+          consultasPorCnpj.set(registro.cnpj, {
+            ...this.normalizarConsulta(registro),
+
+            consultadoEm: registro.consultadoEm,
+
+            consultadoPorNome:
+              registro.CnpjDadosConsultados?.consultadoPorNome ?? null,
+
+            consultadoPorUsuario:
+              registro.CnpjDadosConsultados?.consultadoPorUsuario ?? null,
+
+            consultadoPorObjectGuid:
+              registro.CnpjDadosConsultados?.consultadoPorObjectGuid ?? null,
+          });
         }
       }
 
@@ -3373,6 +3383,12 @@ export class CnpjConsultaService {
 
           return {
             ...consulta,
+
+            consultadoEm: agrupamento._max.consultadoEm,
+
+            consultadoPorNome: consulta.consultadoPorNome,
+            consultadoPorUsuario: consulta.consultadoPorUsuario,
+            consultadoPorObjectGuid: consulta.consultadoPorObjectGuid,
 
             totalConsultas: agrupamento._count._all,
 
