@@ -2072,14 +2072,14 @@ export class CnpjConsultaService {
 
       const cnpjLimpo = this.limparCnpj(cnpj);
 
-      if (!cnpjLimpo) {
-        throw new BadRequestException('O CNPJ é obrigatório.');
-      }
-
       if (!this.validarCnpj(cnpjLimpo)) {
         throw new BadRequestException('O CNPJ informado é inválido.');
       }
 
+      // Verifica a avaliação anual sem impedir a consulta.
+      await this.validarConsultaAnual(cnpjLimpo);
+
+      // Continua normalmente com a criação da consulta.
       if (!dados) {
         throw new BadRequestException(
           'Os dados consultados do CNPJ são obrigatórios.',
@@ -2128,6 +2128,38 @@ export class CnpjConsultaService {
             observacao: this.textoNullable(observacao),
           },
         });
+
+        const anoReferencia = new Date().getFullYear();
+
+        const avaliacaoExistente =
+          await transaction.avaliacaoFornecedores.findFirst({
+            where: {
+              cnpj: cnpjLimpo,
+              anoReferencia,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+        if (!avaliacaoExistente) {
+          const razaoSocial = dados?.razaoSocial?.trim();
+
+          if (!razaoSocial) {
+            throw new BadRequestException(
+              'Não foi possível identificar a razão social do CNPJ.',
+            );
+          }
+          const avaliacao = await this.prisma.avaliacaoFornecedores.create({
+            data: {
+              cnpj: cnpjLimpo,
+              razaoSocial: dados.razaoSocial,
+              anoReferencia,
+              status: 'PENDENTE',
+              ativo: true,
+            },
+          });
+        }
 
         const dadosCriados = await transaction.cnpjDadosConsultados.create({
           data: {
@@ -3233,9 +3265,7 @@ export class CnpjConsultaService {
     const pesquisa = String(body?.pesquisa ?? '').trim();
 
     const page = Math.max(Number(body?.page) || 1, 1);
-
     const limit = Math.min(Math.max(Number(body?.limit) || 10, 1), 100);
-
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -3290,68 +3320,91 @@ export class CnpjConsultaService {
     }
 
     try {
-      const agrupamentos = await this.prisma.cnpjConsulta.groupBy({
-        by: ['cnpj'],
+      const [agrupamentos, totalAgrupamentos] = await Promise.all([
+        this.prisma.cnpjConsulta.groupBy({
+          by: ['cnpj'],
+          where,
 
-        where,
+          _count: {
+            _all: true,
+          },
 
-        _count: {
-          _all: true,
-        },
+          _max: {
+            consultadoEm: true,
+          },
 
-        _max: {
-          consultadoEm: true,
-        },
-
-        orderBy: [
-          {
-            _max: {
-              consultadoEm: 'desc',
+          orderBy: [
+            {
+              _max: {
+                consultadoEm: 'desc',
+              },
             },
-          },
-          {
-            cnpj: 'asc',
-          },
-        ],
+            {
+              cnpj: 'asc',
+            },
+          ],
 
-        skip,
+          skip,
+          take: limit,
+        }),
 
-        take: limit,
-      });
-
-      const totalAgrupamentos = await this.prisma.cnpjConsulta.groupBy({
-        by: ['cnpj'],
-        where,
-      });
+        this.prisma.cnpjConsulta.groupBy({
+          by: ['cnpj'],
+          where,
+        }),
+      ]);
 
       const cnpjs = agrupamentos.map((item) => item.cnpj);
 
-      const registros = cnpjs.length
-        ? await this.prisma.cnpjConsulta.findMany({
-            where: {
-              AND: [
-                where,
-                {
-                  cnpj: {
-                    in: cnpjs,
+      const [registros, avaliacoes] = await Promise.all([
+        cnpjs.length
+          ? this.prisma.cnpjConsulta.findMany({
+              where: {
+                AND: [
+                  where,
+                  {
+                    cnpj: {
+                      in: cnpjs,
+                    },
                   },
+                ],
+              },
+
+              include: this.getIncludeCompleto(),
+
+              orderBy: [
+                {
+                  consultadoEm: 'desc',
+                },
+                {
+                  id: 'desc',
                 },
               ],
-            },
+            })
+          : Promise.resolve([]),
 
-            include: this.getIncludeCompleto(),
-
-            orderBy: [
-              {
-                consultadoEm: 'desc',
+        // Busca as avaliações de todos os CNPJs da página
+        cnpjs.length
+          ? this.prisma.avaliacaoFornecedores.findMany({
+              where: {
+                cnpj: {
+                  in: cnpjs,
+                },
               },
-              {
-                id: 'desc',
-              },
-            ],
-          })
-        : [];
 
+              orderBy: [
+                {
+                  anoReferencia: 'desc',
+                },
+                {
+                  createdAt: 'desc',
+                },
+              ],
+            })
+          : Promise.resolve([]),
+      ]);
+
+      // Agrupa a consulta mais recente por CNPJ
       const consultasPorCnpj = new Map<string, any>();
 
       for (const registro of registros) {
@@ -3373,6 +3426,15 @@ export class CnpjConsultaService {
         }
       }
 
+      // Agrupa somente a avaliação mais recente por CNPJ
+      const avaliacoesPorCnpj = new Map<string, any>();
+
+      for (const avaliacao of avaliacoes) {
+        if (!avaliacoesPorCnpj.has(avaliacao.cnpj)) {
+          avaliacoesPorCnpj.set(avaliacao.cnpj, avaliacao);
+        }
+      }
+
       const result = agrupamentos
         .map((agrupamento) => {
           const consulta = consultasPorCnpj.get(agrupamento.cnpj);
@@ -3380,6 +3442,12 @@ export class CnpjConsultaService {
           if (!consulta) {
             return null;
           }
+
+          const avaliacao = avaliacoesPorCnpj.get(agrupamento.cnpj) ?? null;
+
+          const statusAvaliacao = avaliacao?.status ?? null;
+
+          const podeAvaliar = statusAvaliacao === 'PENDENTE';
 
           return {
             ...consulta,
@@ -3393,6 +3461,19 @@ export class CnpjConsultaService {
             totalConsultas: agrupamento._count._all,
 
             ultimaConsultaEm: agrupamento._max.consultadoEm,
+
+            // Informações da avaliação de fornecedores
+            avaliacaoFornecedores: avaliacao,
+
+            avaliacaoFornecedoresId: avaliacao?.id ?? null,
+
+            statusAvaliacao,
+
+            anoReferenciaAvaliacao: avaliacao?.anoReferencia ?? null,
+
+            possuiAvaliacao: avaliacao !== null,
+
+            podeAvaliar,
           };
         })
         .filter((item) => item !== null);
@@ -3561,6 +3642,98 @@ export class CnpjConsultaService {
       cnpj: cnpjLimpo,
       possuiVerificacaoOficial: verificacao !== null,
       ultimaVerificacao: verificacao,
+    };
+  }
+
+  private async validarAvaliacaoAnual(
+    cnpj: string,
+    anoReferencia: number,
+    avaliacaoId?: string,
+  ) {
+    const cnpjLimpo = this.limparCnpj(cnpj);
+
+    if (!this.validarCnpj(cnpjLimpo)) {
+      throw new BadRequestException('O CNPJ informado é inválido.');
+    }
+
+    if (!Number.isInteger(anoReferencia) || anoReferencia < 2000) {
+      throw new BadRequestException('O ano de referência é inválido.');
+    }
+
+    const avaliacaoExistente =
+      await this.prisma.avaliacaoFornecedores.findFirst({
+        where: {
+          cnpj: cnpjLimpo,
+          anoReferencia,
+          ...(avaliacaoId && {
+            id: {
+              not: avaliacaoId,
+            },
+          }),
+        },
+        select: {
+          id: true,
+          anoReferencia: true,
+        },
+      });
+
+    if (avaliacaoExistente) {
+      throw new BadRequestException(
+        `Este fornecedor já possui uma avaliação cadastrada para o ano de ${anoReferencia}.`,
+      );
+    }
+  }
+
+  private async verificarConsultaVigente(cnpj: string) {
+    const cnpjLimpo = this.limparCnpj(cnpj);
+
+    if (cnpjLimpo.length !== 14) {
+      throw new BadRequestException('O CNPJ deve conter 14 dígitos.');
+    }
+
+    const dataLimite = new Date();
+
+    dataLimite.setMonth(dataLimite.getMonth() - 12);
+
+    const consultaExistente = await this.prisma.cnpjConsulta.findFirst({
+      where: {
+        cnpj: cnpjLimpo,
+        createdAt: {
+          gt: dataLimite,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return consultaExistente;
+  }
+
+  private async validarConsultaAnual(
+    cnpj: string,
+    anoReferencia: number = new Date().getFullYear(),
+  ) {
+    const cnpjLimpo = this.limparCnpj(cnpj);
+
+    if (!this.validarCnpj(cnpjLimpo)) {
+      throw new BadRequestException('O CNPJ informado é inválido.');
+    }
+
+    const avaliacao = await this.prisma.avaliacaoFornecedores.findUnique({
+      where: {
+        cnpj_anoReferencia: {
+          cnpj: cnpjLimpo,
+          anoReferencia,
+        },
+      },
+    });
+
+    return {
+      possuiAvaliacao: avaliacao !== null,
+      avaliacaoRealizada: avaliacao?.ativo === true,
+      anoReferencia,
+      avaliacao,
     };
   }
 }

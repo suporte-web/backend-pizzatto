@@ -36,6 +36,7 @@ import { SegurancaEmAcaoModule } from './segurancaEmAcao/segurancaEmAcao.module'
 import { FeriadosModule } from './feriados/feriados.module';
 import { FeriasModule } from './ferias/ferias.module';
 import { VeiculoProprietarioModule } from './veiculoProprietario/veiculoProprietario.module';
+import { AvaliacaoFornecedoresModule } from './avaliacaoFornecedores/avaliacaoFornecedores.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { VeiculoProprietarioModule } from './veiculoProprietario/veiculoPropriet
     FeriadosModule,
     FeriasModule,
     VeiculoProprietarioModule,
+    AvaliacaoFornecedoresModule,
     ScheduleModule.forRoot(),
   ],
   controllers: [AppController],

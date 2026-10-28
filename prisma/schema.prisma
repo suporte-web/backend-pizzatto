@@ -1294,6 +1294,43 @@ model VeiculoProprietario {
   classificacaoVeiculo String?
 }
 
+model AvaliacaoFornecedores {
+  id                  String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  razaoSocial         String
+  cnpj                String
+  categoria           String?
+  setorResponsavel    String?
+  anoReferencia       Int
+  qualidade           Int?
+  prazoOtd            Int?
+  preco               Int?
+  atendimento         Int?
+  condicoesComerciais Int?
+  documentacaoFiscal  Int?
+  flexibilidade       Int?
+  posVenda            Int?
+  notaFinal           Decimal?                          @db.Decimal(4, 2)
+  classificacao       ClassificacaoAvaliacaoFornecedor?
+  planoAcao           String?
+  observacoes         String?
+  avaliadoPorNome     String?
+  avaliadoPorUsuario  String?
+  avaliadoPorGuid     String?
+  ativo               Boolean                           @default(true)
+  createdAt           DateTime                          @default(now()) @db.Timestamp(6)
+  updatedAt           DateTime                          @default(now()) @db.Timestamp(6)
+  status              StatusAvaliacaoFornecedor         @default(PENDENTE)
+
+  @@unique([cnpj, anoReferencia])
+  @@index([anoReferencia])
+  @@index([categoria])
+  @@index([classificacao])
+  @@index([cnpj])
+  @@index([createdAt])
+  @@index([setorResponsavel])
+  @@index([status])
+}
+
 enum Area {
   Sistemas
   Infra
@@ -1459,4 +1496,17 @@ enum TipoEventoHistoricoFerias {
   DOCUMENTO_ASSINADO
   ALERTA_90_DIAS
   ALERTA_60_DIAS
+}
+
+enum ClassificacaoAvaliacaoFornecedor {
+  EXCELENTE
+  BOM
+  REGULAR
+  RUIM
+  CRITICO
+}
+
+enum StatusAvaliacaoFornecedor {
+  PENDENTE
+  CONCLUIDA
 }
