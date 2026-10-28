@@ -3736,4 +3736,99 @@ export class CnpjConsultaService {
       avaliacao,
     };
   }
+
+  async gerarAvaliacoesPendentes(body: { anoReferencia?: number } = {}) {
+    const anoReferencia = Number(
+      body?.anoReferencia ?? new Date().getFullYear(),
+    );
+
+    if (!Number.isInteger(anoReferencia) || anoReferencia < 2000) {
+      throw new BadRequestException('Ano de referência inválido.');
+    }
+
+    // Busca todos os fornecedores já consultados
+    const consultas = await this.prisma.cnpjConsulta.findMany({
+      select: {
+        cnpj: true,
+        CnpjDadosConsultados: {
+          select: {
+            razaoSocial: true,
+          },
+        },
+      },
+      orderBy: {
+        consultadoEm: 'desc',
+      },
+    });
+
+    // Remove CNPJs duplicados, priorizando os dados mais recentes
+    const fornecedores = new Map<string, string>();
+
+    for (const consulta of consultas) {
+      const cnpj = this.limparCnpj(consulta.cnpj);
+
+      const razaoSocial = String(
+        consulta.CnpjDadosConsultados?.razaoSocial ?? '',
+      ).trim();
+
+      if (this.validarCnpj(cnpj) && razaoSocial && !fornecedores.has(cnpj)) {
+        fornecedores.set(cnpj, razaoSocial);
+      }
+    }
+
+    const cnpjs = [...fornecedores.keys()];
+
+    if (cnpjs.length === 0) {
+      return {
+        message: 'Nenhum fornecedor encontrado.',
+        anoReferencia,
+        totalFornecedores: 0,
+        avaliacoesExistentes: 0,
+        avaliacoesCriadas: 0,
+      };
+    }
+
+    // Verifica avaliações existentes no ano de referência
+    const avaliacoesExistentes =
+      await this.prisma.avaliacaoFornecedores.findMany({
+        where: {
+          cnpj: {
+            in: cnpjs,
+          },
+          anoReferencia,
+        },
+        select: {
+          cnpj: true,
+        },
+      });
+
+    const cnpjsComAvaliacao = new Set(
+      avaliacoesExistentes.map((avaliacao) => avaliacao.cnpj),
+    );
+
+    // Cria somente avaliações inexistentes
+    const avaliacoesParaCriar = [...fornecedores.entries()]
+      .filter(([cnpj]) => !cnpjsComAvaliacao.has(cnpj))
+      .map(([cnpj, razaoSocial]) => ({
+        cnpj,
+        razaoSocial,
+        anoReferencia,
+        status: 'PENDENTE' as const,
+        ativo: true,
+      }));
+
+    const resultado = await this.prisma.avaliacaoFornecedores.createMany({
+      data: avaliacoesParaCriar,
+      skipDuplicates: true,
+    });
+
+    return {
+      message: 'Verificação de avaliações concluída.',
+      anoReferencia,
+      totalFornecedores: fornecedores.size,
+      avaliacoesExistentes: cnpjsComAvaliacao.size,
+      avaliacoesCriadas: resultado.count,
+      avaliacoesIgnoradas: avaliacoesParaCriar.length - resultado.count,
+    };
+  }
 }
