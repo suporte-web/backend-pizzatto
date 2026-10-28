@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import * as path from 'path';
 import { CnpjNichoValidator } from './validators/cnpj-nicho.validator';
 import { RegimeTributarioCnpj } from '../../generated/prisma/enums';
 import { CnpjSimplesService } from './cnpj-simples.service';
+import { Cron } from '@nestjs/schedule';
 
 export type FonteStatus =
   | 'SUCESSO'
@@ -3830,5 +3832,46 @@ export class CnpjConsultaService {
       avaliacoesCriadas: resultado.count,
       avaliacoesIgnoradas: avaliacoesParaCriar.length - resultado.count,
     };
+  }
+
+  private readonly logger = new Logger(CnpjConsultaService.name);
+
+  @Cron('0 45 17 * * *', {
+    name: 'gerar-avaliacoes-fornecedores',
+    timeZone: 'America/Sao_Paulo',
+    waitForCompletion: true,
+  })
+  async gerarAvaliacoesPendentesCron() {
+    this.logger.log(
+      'Iniciando verificação automática das avaliações de fornecedores...',
+    );
+
+    try {
+      const anoReferencia = Number(
+        new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+        }).format(new Date()),
+      );
+
+      const resultado = await this.gerarAvaliacoesPendentes({
+        anoReferencia,
+      });
+
+      this.logger.log(
+        `Verificação de avaliações concluída. ` +
+          `Ano: ${resultado.anoReferencia} | ` +
+          `Fornecedores: ${resultado.totalFornecedores} | ` +
+          `Existentes: ${resultado.avaliacoesExistentes} | ` +
+          `Criadas: ${resultado.avaliacoesCriadas}`,
+      );
+
+      return resultado;
+    } catch (error: any) {
+      this.logger.error(
+        `Erro ao gerar avaliações automáticas: ${error?.message}`,
+        error?.stack,
+      );
+    }
   }
 }
