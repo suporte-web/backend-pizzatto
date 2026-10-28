@@ -39,13 +39,16 @@ async function bootstrap() {
       },
       'access-token',
     )
+    .addServer(process.env.NODE_ENV === 'production' ? '/api' : '/')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
+
   SwaggerModule.setup('api', app, document);
 
   const port = Number(process.env.PORT ?? 3000);
   const host = process.env.HOST ?? 'localhost';
+
   await app.listen(port, host);
 
   Logger.log(`Application running on port ${port}`, 'Bootstrap');
