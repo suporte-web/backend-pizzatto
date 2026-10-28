@@ -26,7 +26,7 @@ import { User } from '@/decorator/user.decorator';
 
 @ApiTags('CNPJ Consulta')
 @Controller('cnpj-consultas')
-// @UseGuards(AuthGuard)
+@UseGuards(AuthGuard)
 export class CnpjConsultaController {
   constructor(private readonly cnpjConsultaService: CnpjConsultaService) {}
 
@@ -160,7 +160,7 @@ export class CnpjConsultaController {
 
   @Post('gerar-avaliacoes-pendentes')
   @ApiOperation({
-    summary: 'Gerar avaliações pendentes para fornecedores sem avaliação anual',
+    summary: 'Gerar avaliações pendentes dos fornecedores',
   })
   async gerarAvaliacoesPendentes(@Body() body: { anoReferencia?: number }) {
     return this.cnpjConsultaService.gerarAvaliacoesPendentes(body);
