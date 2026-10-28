@@ -158,11 +158,11 @@ export class CnpjConsultaController {
     return this.cnpjConsultaService.findUltimaVerificacaoSimples(cnpj);
   }
 
-  @Post('gerar-avaliacoes-pendentes')
-  @ApiOperation({
-    summary: 'Gerar avaliações pendentes dos fornecedores',
-  })
-  async gerarAvaliacoesPendentes(@Body() body: { anoReferencia?: number }) {
-    return this.cnpjConsultaService.gerarAvaliacoesPendentes(body);
-  }
+  // @Post('gerar-avaliacoes-pendentes')
+  // @ApiOperation({
+  //   summary: 'Gerar avaliações pendentes dos fornecedores',
+  // })
+  // async gerarAvaliacoesPendentes(@Body() body: { anoReferencia?: number }) {
+  //   return this.cnpjConsultaService.gerarAvaliacoesPendentes(body);
+  // }
 }
