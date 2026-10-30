@@ -93,4 +93,17 @@ export class BibliotecaMarcaController {
   ) {
     return this.bibliotecaMarcaService.update(body, files, ip, user);
   }
+
+  @Patch('update-status-biblioteca')
+  async updateStatusBiblioteca(
+    @Body() body: any,
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.bibliotecaMarcaService.updateStatusBiblioteca(
+      body,
+      ip,
+      user,
+    );
+  }
 }

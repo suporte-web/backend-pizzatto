@@ -117,4 +117,22 @@ export class BibliotecaMarcaService {
 
     return upd;
   }
+
+  async updateStatusBiblioteca(body: any, ip: string, user: any) {
+    const upd = await this.prisma.bibliotecaMarca.update({
+      where: { id: body.id },
+      data: { status: body.status },
+    });
+
+    await this.prisma.audit_logs.create({
+      data: {
+        acao: `Atualizou o status da Biblioteca de Marca - ${upd.nome}`,
+        entidade: user?.name,
+        filialEntidade: user?.company,
+        ipAddress: ip,
+      },
+    });
+
+    return upd;
+  }
 }
