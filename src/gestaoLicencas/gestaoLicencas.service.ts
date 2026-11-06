@@ -599,7 +599,7 @@ export class GestaoLicencasService {
     const roles = user?.roles ?? [];
 
     const podeVisualizarInativas =
-      roles.includes('DESENVOLVIMENTO') || roles.includes('REGULATORIO');
+      roles.includes('DESENVOLVIMENTO') || roles.includes('REGULATORIO_ADMIN');
 
     const whereLicenca: any = {};
 
