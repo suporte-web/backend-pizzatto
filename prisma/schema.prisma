@@ -23,14 +23,6 @@ model Assinatura {
   revisadoPor   String?
 }
 
-model ContasOffice {
-  id    String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nome  String
-  email String
-  senha String
-  ativo Boolean @default(false)
-}
-
 model InventarioImpressoras {
   id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   filial             String
@@ -1331,6 +1323,28 @@ model AvaliacaoFornecedores {
   @@index([status])
 }
 
+model ContasEmail {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome         String
+  email        String
+  senha        String
+  tipoConta    TipoContaEmail @default(OUTRO)
+  plataforma   String?
+  finalidade   String?
+  empresa      String?
+  departamento String?
+  responsavel  String?
+  urlAcesso    String?
+  observacoes  String?
+  ativo        Boolean        @default(true)
+  criadoEm     DateTime       @default(now())
+  atualizadoEm DateTime       @default(now())
+
+  @@index([ativo])
+  @@index([email])
+  @@index([tipoConta])
+}
+
 enum Area {
   Sistemas
   Infra
@@ -1509,4 +1523,14 @@ enum ClassificacaoAvaliacaoFornecedor {
 enum StatusAvaliacaoFornecedor {
   PENDENTE
   CONCLUIDA
+}
+
+enum TipoContaEmail {
+  MICROSOFT_365
+  POWER_BI
+  GOOGLE_WORKSPACE
+  EMAIL_CORPORATIVO
+  SISTEMA_EXTERNO
+  FORNECEDOR
+  OUTRO
 }

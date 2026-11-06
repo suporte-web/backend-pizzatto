@@ -5,7 +5,6 @@ import { AuthModule } from './auth/auth.module';
 import { PopModule } from './pops/pops.module';
 import { FileModule } from './file/file.module';
 import { InventarioImpressoraModule } from './inventarioImpressoras/inventarioImpressoras.module';
-import { ContasOfficeModule } from './contasOffice/contasOffice.module';
 import { ToDoModule } from './to-do/to-do.module';
 import { GlpiModule } from './glpi/glpi.module';
 import { PlantaoModule } from './plantao/plantao.module.';
@@ -37,6 +36,7 @@ import { FeriadosModule } from './feriados/feriados.module';
 import { FeriasModule } from './ferias/ferias.module';
 import { VeiculoProprietarioModule } from './veiculoProprietario/veiculoProprietario.module';
 import { AvaliacaoFornecedoresModule } from './avaliacaoFornecedores/avaliacaoFornecedores.module';
+import { ContasEmailModule } from './contasEmail/contasEmail.module';
 
 @Module({
   imports: [
@@ -45,7 +45,7 @@ import { AvaliacaoFornecedoresModule } from './avaliacaoFornecedores/avaliacaoFo
     PopModule,
     FileModule,
     InventarioImpressoraModule,
-    ContasOfficeModule,
+    ContasEmailModule,
     GlpiModule,
     ToDoModule,
     PlantaoModule,
