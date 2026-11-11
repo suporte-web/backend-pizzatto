@@ -85,6 +85,17 @@ export class GestaoDocumentosController {
     );
   }
 
+  @Post('documento/find-by-filter-setores')
+  @ApiOperation({
+    summary: 'Encontra todos os Documentos filtrando',
+  })
+  async findByFilterSetores(@Body() body: any, @User() user: any) {
+    return await this.gestaoDocumentosService.findByFilterSetores(
+      body,
+      user,
+    );
+  }
+
   @Get('documento/find-by-setor/:setor')
   @ApiOperation({
     summary: 'Encontra todos os Documentos cadastrados pelo setor',

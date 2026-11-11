@@ -409,6 +409,107 @@ export class GestaoDocumentosService {
     return categoria;
   }
 
+  async findByFilterSetores(body: any, user: any) {
+    const { pesquisa, page = 1, limit = 10 } = body || {};
+
+    const pageNumber = Math.max(Number(page) || 1, 1);
+    const limitNumber = Math.max(Number(limit) || 10, 1);
+
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const filtroAcesso = this.montarFiltroAcessoDocumentos(user);
+
+    const where: any = {
+      ativo: true,
+      setorResponsavel: {
+        not: '',
+      },
+      AND: [],
+    };
+
+    if (pesquisa && String(pesquisa).trim()) {
+      where.AND.push({
+        setorResponsavel: {
+          contains: String(pesquisa).trim(),
+          mode: 'insensitive',
+        },
+      });
+    }
+
+    if (filtroAcesso) {
+      where.AND.push(filtroAcesso);
+    }
+
+    if (where.AND.length === 0) {
+      delete where.AND;
+    }
+
+    // Agrupa os documentos por setor e categoria.
+    const documentosAgrupados = await this.prisma.documento.groupBy({
+      by: ['setorResponsavel', 'categoriaId'],
+      where,
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        setorResponsavel: 'asc',
+      },
+    });
+
+    // Consolida as categorias e documentos por setor.
+    const setoresMap = new Map<
+      string,
+      {
+        setor: string;
+        totalDocumentos: number;
+        categoriasIds: Set<string>;
+      }
+    >();
+
+    for (const item of documentosAgrupados) {
+      const setor = String(item.setorResponsavel || '').trim();
+
+      if (!setor || !item.categoriaId) {
+        continue;
+      }
+
+      const chave = setor.toLowerCase();
+
+      if (!setoresMap.has(chave)) {
+        setoresMap.set(chave, {
+          setor,
+          totalDocumentos: 0,
+          categoriasIds: new Set<string>(),
+        });
+      }
+
+      const setorAtual = setoresMap.get(chave)!;
+
+      setorAtual.totalDocumentos += item._count._all;
+      setorAtual.categoriasIds.add(item.categoriaId);
+    }
+
+    const setores = Array.from(setoresMap.values())
+      .map((item) => ({
+        setor: item.setor,
+        totalDocumentos: item.totalDocumentos,
+        totalCategorias: item.categoriasIds.size,
+      }))
+      .sort((a, b) => a.setor.localeCompare(b.setor, 'pt-BR'));
+
+    const total = setores.length;
+
+    const result = setores.slice(skip, skip + limitNumber);
+
+    return {
+      result,
+      total,
+      page: pageNumber,
+      limit: limitNumber,
+      totalPages: Math.ceil(total / limitNumber),
+    };
+  }
+
   async findByFilterDocumentos(body: any, user: any) {
     const usuarioId = user?.objectGUID || user?.adObjectGuid || user?.sub || '';
 
