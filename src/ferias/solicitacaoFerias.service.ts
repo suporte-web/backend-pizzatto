@@ -1383,6 +1383,204 @@ export class SolicitacaoFeriasService {
     });
   }
 
+  async editarDataParcela(
+    body: { parcelaId: string; dataInicio: string },
+    ip: string,
+    user: any,
+  ) {
+    if (!body?.parcelaId) {
+      throw new BadRequestException('A parcela de férias é obrigatória.');
+    }
+
+    if (!body?.dataInicio) {
+      throw new BadRequestException('A nova data de início é obrigatória.');
+    }
+
+    // Permissões: ajuste conforme os perfis autorizados pelo RH.
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+
+    const podeAlterar = [
+      'ADMIN',
+      'PESSOAS_E_CULTURA',
+      'DEPARTAMENTO_PESSOAL',
+      'DESENVOLVIMENTO',
+    ].some((role) => roles.includes(role));
+
+    if (!podeAlterar) {
+      throw new ForbiddenException(
+        'Você não possui permissão para editar férias.',
+      );
+    }
+
+    const parcela = await this.prisma.parcelaFerias.findUnique({
+      where: { id: body.parcelaId },
+      include: {
+        DocumentoFerias: true,
+        SolicitacaoFerias: {
+          include: {
+            PeriodoAquisitivoFerias: {
+              include: { UsuarioChat: true },
+            },
+            ParcelaFerias: {
+              orderBy: { ordem: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!parcela) {
+      throw new BadRequestException('Parcela de férias não encontrada.');
+    }
+
+    const solicitacao = parcela.SolicitacaoFerias;
+    const usuarioChat = solicitacao.PeriodoAquisitivoFerias.UsuarioChat;
+
+    if (!usuarioChat) {
+      throw new BadRequestException(
+        'Colaborador vinculado às férias não encontrado.',
+      );
+    }
+
+    // Apenas parcelas ainda não aprovadas.
+    if (parcela.status !== 'AGUARDANDO_APROVACAO') {
+      throw new BadRequestException(
+        `Não é permitido editar uma parcela com status ${parcela.status}.`,
+      );
+    }
+
+    if (
+      solicitacao.status === 'CANCELADO' ||
+      solicitacao.status === 'REPROVADO' ||
+      solicitacao.status === 'CONCLUIDO'
+    ) {
+      throw new BadRequestException(
+        'Esta solicitação não permite alteração de datas.',
+      );
+    }
+
+    if (parcela.aprovadoEm || parcela.aprovadoPorUsuario) {
+      throw new BadRequestException(
+        'Esta parcela já possui registro de aprovação.',
+      );
+    }
+
+    if (parcela.DocumentoFerias.length > 0) {
+      throw new BadRequestException(
+        'Não é permitido alterar uma parcela que possui documentos vinculados.',
+      );
+    }
+
+    const novaDataInicio = this.converterData(body.dataInicio);
+
+    if (novaDataInicio.getTime() === parcela.dataInicio.getTime()) {
+      throw new BadRequestException(
+        'A nova data deve ser diferente da data atual.',
+      );
+    }
+
+    // Reutiliza as regras existentes.
+    this.regras.validarAntecedenciaMinima(novaDataInicio);
+    this.regras.validarDiaSemana(novaDataInicio);
+
+    await this.regras.validarFeriados(novaDataInicio, usuarioChat.empresa);
+
+    const novaDataFim = this.regras.calcularDataFim(
+      novaDataInicio,
+      parcela.quantidadeDias,
+    );
+
+    const novaDataRetorno = this.regras.calcularDataRetorno(novaDataFim);
+
+    // Simula a alteração para validar todas as parcelas em conjunto.
+    // Nenhuma outra parcela será modificada no banco.
+    const parcelasParaValidacao = solicitacao.ParcelaFerias.map((item) => ({
+      ordem: item.ordem,
+      quantidadeDias: item.quantidadeDias,
+      dataInicio: item.id === parcela.id ? novaDataInicio : item.dataInicio,
+      dataFim: item.id === parcela.id ? novaDataFim : item.dataFim,
+      dataRetorno: item.id === parcela.id ? novaDataRetorno : item.dataRetorno,
+    }));
+
+    this.regras.validarOrdemCronologicaParcelas(parcelasParaValidacao);
+
+    this.regras.validarSobreposicaoParcelas(parcelasParaValidacao);
+
+    const dadosAnteriores = {
+      parcelaId: parcela.id,
+      ordem: parcela.ordem,
+      quantidadeDias: parcela.quantidadeDias,
+      dataInicio: parcela.dataInicio.toISOString(),
+      dataFim: parcela.dataFim.toISOString(),
+      dataRetorno: parcela.dataRetorno.toISOString(),
+      status: parcela.status,
+    };
+
+    const dadosNovos = {
+      parcelaId: parcela.id,
+      ordem: parcela.ordem,
+      quantidadeDias: parcela.quantidadeDias,
+      dataInicio: novaDataInicio.toISOString(),
+      dataFim: novaDataFim.toISOString(),
+      dataRetorno: novaDataRetorno.toISOString(),
+      status: parcela.status,
+    };
+
+    // Transação com verificação condicional de status.
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      const atualizacao = await tx.parcelaFerias.updateMany({
+        where: {
+          id: parcela.id,
+          status: 'AGUARDANDO_APROVACAO',
+          aprovadoEm: null,
+          aprovadoPorUsuario: null,
+          DocumentoFerias: { none: {} },
+          SolicitacaoFerias: {
+            status: {
+              notIn: ['CANCELADO', 'REPROVADO', 'CONCLUIDO'],
+            },
+          },
+        },
+        data: {
+          dataInicio: novaDataInicio,
+          dataFim: novaDataFim,
+          dataRetorno: novaDataRetorno,
+        },
+      });
+
+      if (atualizacao.count !== 1) {
+        throw new BadRequestException(
+          'A parcela não está mais disponível para edição. Atualize a listagem.',
+        );
+      }
+
+      await tx.historicoSolicitacaoFerias.create({
+        data: {
+          solicitacaoId: solicitacao.id,
+          tipoEvento: 'EDICAO',
+          descricao: `Data da ${parcela.ordem}ª parcela de férias alterada pelo RH.`,
+          statusAnterior: parcela.status,
+          statusNovo: parcela.status,
+          responsavelUsuario: user?.sam ?? null,
+          responsavelNome: user?.name ?? null,
+          responsavelEmail: user?.mail ?? null,
+          ipAddress: ip,
+          dadosAnteriores,
+          dadosNovos,
+        },
+      });
+
+      return tx.parcelaFerias.findUnique({
+        where: { id: parcela.id },
+      });
+    });
+
+    return {
+      message: 'Data da parcela de férias alterada com sucesso.',
+      result: resultado,
+    };
+  }
+
   async cancelarSolicitacao(body: any, ip: string, user: any) {
     if (!body?.solicitacaoId) {
       throw new BadRequestException('Solicitação de férias é obrigatória.');
@@ -1395,7 +1593,8 @@ export class SolicitacaoFeriasService {
     const roles = Array.isArray(user?.roles) ? user.roles : [];
 
     const podeCancelar =
-      roles.includes('DEPARTAMENTO_PESSOAL') || roles.includes('DESENVOLVIMENTO');
+      roles.includes('DEPARTAMENTO_PESSOAL') ||
+      roles.includes('DESENVOLVIMENTO');
 
     if (!podeCancelar) {
       throw new ForbiddenException(

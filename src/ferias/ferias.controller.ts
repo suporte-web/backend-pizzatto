@@ -97,6 +97,22 @@ export class FeriasController {
     return await this.solicitacaoService.updateSolicitacao(body, ip, user);
   }
 
+  @Post('solicitacao/editar-data-parcela')
+  @ApiOperation({
+    summary: 'Altera a data de uma parcela de férias não aprovada',
+  })
+  async editarDataParcela(
+    @Body()
+    body: {
+      parcelaId: string;
+      dataInicio: string;
+    },
+    @ClientIp() ip: string,
+    @User() user: any,
+  ) {
+    return await this.solicitacaoService.editarDataParcela(body, ip, user);
+  }
+
   @Post('solicitacao/cancelar')
   @ApiOperation({
     summary: 'Altera uma solicitação de férias pelo RH',
