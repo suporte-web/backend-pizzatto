@@ -1345,6 +1345,43 @@ model ContasEmail {
   @@index([tipoConta])
 }
 
+model Gestores {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adObjectGuid String   @unique
+  nome         String
+  departamento String?
+  cargo        String?
+  email        String?
+  filial       String?
+  recebeEmail  String   @default("SIM")
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamp(6)
+  updatedAt    DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([ativo])
+  @@index([filial])
+  @@index([recebeEmail])
+}
+
+model FeriadoNotificacaoEnvio {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chave        String    @unique
+  feriadoId    String    @db.Uuid
+  gestorId     String    @db.Uuid
+  nomeFeriado  String
+  dataFeriado  DateTime  @db.Date
+  destinatario String
+  assunto      String
+  status       String    @default("PROCESSANDO")
+  detalhe      String?
+  enviadoEm    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @db.Timestamp(6)
+
+  @@unique([feriadoId, dataFeriado, gestorId])
+  @@index([createdAt])
+}
+
 enum Area {
   Sistemas
   Infra
