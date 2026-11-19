@@ -4,6 +4,7 @@ import {
   montarMensagem,
   ocorrencia,
   tresDiasUteisAntes,
+  estaNaJanelaDeNotificacao,
 } from './feriadosNotificacoes.utils';
 import type { FeriadoNotificavel } from './feriadosNotificacoes.utils';
 
@@ -83,6 +84,103 @@ describe('Calendário dos comunicados', () => {
     ['COP___Boticario', 'COP - Boticario'],
   ])('reconhece a filial %s', (codigo, nome) => {
     expect(filialChave(codigo)).toBe(filialChave(nome));
+  });
+});
+
+describe('Janela de três a um dia útil antes', () => {
+  const data = new Date('2026-11-20T00:00:00Z');
+  it.each(['2026-11-17', '2026-11-18', '2026-11-19'])(
+    'inclui o dia útil %s',
+    (dia) => {
+      expect(
+        estaNaJanelaDeNotificacao(
+          data,
+          new Date(`${dia}T00:00:00Z`),
+          ['Costeira'],
+          [],
+        ),
+      ).toBe(true);
+    },
+  );
+  it.each(['2026-11-16', '2026-11-20', '2026-11-21'])(
+    'exclui dia fora da janela: %s',
+    (dia) => {
+      expect(
+        estaNaJanelaDeNotificacao(
+          data,
+          new Date(`${dia}T00:00:00Z`),
+          ['Costeira'],
+          [],
+        ),
+      ).toBe(false);
+    },
+  );
+  it('considera feriado cadastrado no intervalo e não tenta nele', () => {
+    const calendario = [feriado('2026-11-18')];
+    for (const dia of ['2026-11-16', '2026-11-17', '2026-11-19']) {
+      expect(
+        estaNaJanelaDeNotificacao(
+          data,
+          new Date(`${dia}T00:00:00Z`),
+          ['Costeira'],
+          calendario,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      estaNaJanelaDeNotificacao(
+        data,
+        new Date('2026-11-18T00:00:00Z'),
+        ['Costeira'],
+        calendario,
+      ),
+    ).toBe(false);
+  });
+  it('não exclui feriado municipal de uma filial diferente', () => {
+    const calendario = [feriado('2026-11-18', 'MUNICIPAL', ['Matriz'])];
+    expect(
+      estaNaJanelaDeNotificacao(
+        data,
+        new Date('2026-11-18T00:00:00Z'),
+        ['Costeira'],
+        calendario,
+      ),
+    ).toBe(true);
+  });
+  it('exclui sábado e domingo mesmo entre a primeira e a última data de envio', () => {
+    const segunda = new Date('2026-11-23T00:00:00Z');
+    for (const dia of ['2026-11-21', '2026-11-22']) {
+      expect(
+        estaNaJanelaDeNotificacao(
+          segunda,
+          new Date(`${dia}T00:00:00Z`),
+          ['Costeira'],
+          [],
+        ),
+      ).toBe(false);
+    }
+  });
+  it('considera a janela no ano anterior para feriado recorrente em janeiro', () => {
+    const janeiro = new Date('2027-01-04T00:00:00Z');
+    const calendario = [feriado('2024-01-01', 'NACIONAL', [], true)];
+    for (const dia of ['2026-12-29', '2026-12-30', '2026-12-31']) {
+      expect(
+        estaNaJanelaDeNotificacao(
+          janeiro,
+          new Date(`${dia}T00:00:00Z`),
+          ['Costeira'],
+          calendario,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      estaNaJanelaDeNotificacao(
+        janeiro,
+        new Date('2027-01-01T00:00:00Z'),
+        ['Costeira'],
+        calendario,
+      ),
+    ).toBe(false);
   });
 });
 

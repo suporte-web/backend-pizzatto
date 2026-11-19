@@ -50,32 +50,57 @@ export function ocorrencia(
   return data.getUTCMonth() === original.getUTCMonth() ? data : null;
 }
 
+export function ehDiaUtil(
+  data: Date,
+  filiais: string[],
+  calendario: FeriadoNotificavel[],
+) {
+  if ([0, 6].includes(data.getUTCDay())) return false;
+  const filiaisAlvo = new Set(filiais.map(filialChave));
+  return !calendario.some((f) => {
+    if (f.tipoFeriado === 'PONTO_FACULTATIVO') return false;
+    if (
+      f.tipoFeriado !== 'NACIONAL' &&
+      !f.filiais.some((filial) => filiaisAlvo.has(filialChave(filial)))
+    )
+      return false;
+    return ocorrencia(f, data.getUTCFullYear())?.getTime() === data.getTime();
+  });
+}
+
+function diasUteisAntes(
+  data: Date,
+  filiais: string[],
+  calendario: FeriadoNotificavel[],
+  quantidade: number,
+) {
+  const dataEnvio = new Date(data);
+  let dias = 0;
+  while (dias < quantidade) {
+    dataEnvio.setUTCDate(dataEnvio.getUTCDate() - 1);
+    if (ehDiaUtil(dataEnvio, filiais, calendario)) dias++;
+  }
+  return dataEnvio;
+}
+
 export function tresDiasUteisAntes(
   data: Date,
   filiais: string[],
   calendario: FeriadoNotificavel[],
 ) {
-  const dataEnvio = new Date(data);
-  const filiaisAlvo = new Set(filiais.map(filialChave));
-  let dias = 0;
-  while (dias < 3) {
-    dataEnvio.setUTCDate(dataEnvio.getUTCDate() - 1);
-    if ([0, 6].includes(dataEnvio.getUTCDay())) continue;
-    const feriadoNoDia = calendario.some((f) => {
-      if (f.tipoFeriado === 'PONTO_FACULTATIVO') return false;
-      if (
-        f.tipoFeriado !== 'NACIONAL' &&
-        !f.filiais.some((filial) => filiaisAlvo.has(filialChave(filial)))
-      )
-        return false;
-      return (
-        ocorrencia(f, dataEnvio.getUTCFullYear())?.getTime() ===
-        dataEnvio.getTime()
-      );
-    });
-    if (!feriadoNoDia) dias++;
-  }
-  return dataEnvio;
+  return diasUteisAntes(data, filiais, calendario, 3);
+}
+
+export function estaNaJanelaDeNotificacao(
+  data: Date,
+  hoje: Date,
+  filiais: string[],
+  calendario: FeriadoNotificavel[],
+) {
+  if (hoje >= data || !ehDiaUtil(hoje, filiais, calendario)) return false;
+  const inicio = diasUteisAntes(data, filiais, calendario, 3);
+  const fim = diasUteisAntes(data, filiais, calendario, 1);
+  return hoje >= inicio && hoje <= fim;
 }
 
 const escapar = (valor: string) =>

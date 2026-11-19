@@ -20,19 +20,19 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
   let prisma: any;
   let email: any;
   let service: FeriadosNotificacoesService;
+  let registros: any[];
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env = {
       ...ambiente,
-      FERIADOS_NOTIFICACOES_ATIVAS: 'true',
       FERIADOS_EMAIL_GRH: 'grh@example.com',
       AUTH_API_URL: 'https://ad.example.com',
       JWT_SECRET: 'segredo-teste',
     };
     const chaves = new Set();
     const identidades = new Set();
-    const registros: any[] = [];
+    registros = [];
     prisma = {
       feriado: {
         findMany: jest.fn().mockResolvedValue([
@@ -53,12 +53,37 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
             throw { code: 'P2002' };
           chaves.add(data.chave);
           identidades.add(identidade);
-          const registro = { ...data, id: `envio-${registros.length + 1}` };
+          const registro = {
+            status: 'PROCESSANDO',
+            enviadoEm: null,
+            ...data,
+            id: `envio-${registros.length + 1}`,
+          };
           registros.push(registro);
           return registro;
         }),
-        findMany: jest.fn(async () => registros),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn(async ({ where }) =>
+          registros
+            .filter(
+              (r) =>
+                r.feriadoId === where.feriadoId &&
+                r.dataFeriado.getTime() === where.dataFeriado.getTime(),
+            )
+            .map((r) => ({ ...r })),
+        ),
+        update: jest.fn(async ({ where, data }) => {
+          const registro = registros.find((r) => r.id === where.id);
+          if (!registro) throw new Error('Registro não encontrado');
+          Object.assign(registro, data);
+          return { ...registro };
+        }),
+        updateMany: jest.fn(async ({ where, data }) => {
+          const selecionados = registros.filter((r) =>
+            where.id.in.includes(r.id),
+          );
+          selecionados.forEach((r) => Object.assign(r, data));
+          return { count: selecionados.length };
+        }),
       },
     };
     prisma.$queryRaw = jest.fn().mockResolvedValue([{ adquirido: true }]);
@@ -106,15 +131,21 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       }),
     );
   });
-  it('não envia antes das 8h, em outro dia ou com automação desligada', async () => {
+  it('não envia antes das 8h, fora da janela, em finais de semana ou no feriado', async () => {
     await service.verificarFeriadosParaNotificar(
       new Date('2026-10-28T10:59:00Z'),
     );
-    await service.verificarFeriadosParaNotificar(
-      new Date('2026-10-29T11:00:00Z'),
-    );
-    process.env.FERIADOS_NOTIFICACOES_ATIVAS = 'false';
-    await service.verificarFeriadosParaNotificar(agora);
+    for (const dia of [
+      '2026-10-27',
+      '2026-10-31',
+      '2026-11-01',
+      '2026-11-02',
+      '2026-11-03',
+    ]) {
+      await service.verificarFeriadosParaNotificar(
+        new Date(`${dia}T11:00:00Z`),
+      );
+    }
     expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
   });
   it('protege verificações repetidas e simultâneas contra duplicidade', async () => {
@@ -154,7 +185,7 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
     expect(prisma.feriadoNotificacaoEnvio.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'FALHA' }),
+        data: expect.objectContaining({ status: 'INCERTO' }),
       }),
     );
   });
@@ -216,7 +247,7 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       email: 'outro@example.com',
     };
     (axios.get as jest.Mock).mockResolvedValue({ data: [gestor, outro] });
-    email.enviarEmCopiaOculta.mockResolvedValue({
+    email.enviarEmCopiaOculta.mockResolvedValueOnce({
       aceitos: [gestor.email],
       rejeitados: [outro.email],
     });
@@ -230,11 +261,13 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
     expect(prisma.feriadoNotificacaoEnvio.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: { in: ['envio-2'] } },
-        data: expect.objectContaining({ status: 'FALHA' }),
+        data: expect.objectContaining({ status: 'RETENTAR' }),
       }),
     );
     await service.verificarFeriadosParaNotificar(agora);
-    expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
+    expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(2);
+    expect(email.enviarEmCopiaOculta.mock.calls[1][0]).toEqual([outro.email]);
+    expect(registros.map((r) => r.status)).toEqual(['ENVIADO', 'ENVIADO']);
   });
   it('não envia um grupo incompleto se a reserva transacional falhar', async () => {
     const outro = {
@@ -254,5 +287,128 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
     await service.verificarFeriadosParaNotificar(agora);
     expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
     expect(prisma.feriadoNotificacaoEnvio.create).not.toHaveBeenCalled();
+  });
+  it.each(['2026-10-28', '2026-10-29', '2026-10-30'])(
+    'envia no terceiro, segundo ou último dia útil: %s',
+    async (dia) => {
+      await service.verificarFeriadosParaNotificar(
+        new Date(`${dia}T11:00:00Z`),
+      );
+      expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
+    },
+  );
+  it.each([undefined, 'false'])(
+    'funciona sem depender da antiga variável de ativação: %s',
+    async (valor) => {
+      if (valor === undefined) delete process.env.FERIADOS_NOTIFICACOES_ATIVAS;
+      else process.env.FERIADOS_NOTIFICACOES_ATIVAS = valor;
+      await service.verificarFeriadosParaNotificar(agora);
+      expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('recupera indisponibilidade do AD no último dia útil sem repetir quem recebeu', async () => {
+    (axios.get as jest.Mock)
+      .mockRejectedValueOnce(new Error('AD indisponível'))
+      .mockRejectedValueOnce(new Error('AD indisponível'));
+    await service.verificarFeriadosParaNotificar(agora);
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-29T11:00:00Z'),
+    );
+    expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-30T11:00:00Z'),
+    );
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-30T11:15:00Z'),
+    );
+    expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
+    expect(registros[0].status).toBe('ENVIADO');
+  });
+  it('repete uma conexão SMTP recusada e reutiliza o registro da tentativa', async () => {
+    email.enviarEmCopiaOculta.mockRejectedValueOnce(
+      Object.assign(new Error('Conexão recusada'), { code: 'ECONNREFUSED' }),
+    );
+    await service.verificarFeriadosParaNotificar(agora);
+    expect(registros[0].status).toBe('RETENTAR');
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-29T11:00:00Z'),
+    );
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-30T11:00:00Z'),
+    );
+    expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(2);
+    expect(prisma.feriadoNotificacaoEnvio.create).toHaveBeenCalledTimes(1);
+    expect(registros[0].status).toBe('ENVIADO');
+  });
+  it.each(['PROCESSANDO', 'INCERTO', 'FALHA', 'ENVIADO'])(
+    'não repete registro bloqueado com status %s',
+    async (status) => {
+      registros.push({
+        id: 'existente',
+        feriadoId,
+        dataFeriado: new Date('2026-11-02T00:00:00Z'),
+        gestorId,
+        destinatario: gestor.email,
+        status,
+        enviadoEm: null,
+      });
+      await service.verificarFeriadosParaNotificar(agora);
+      expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
+    },
+  );
+  it('não repete registro com aceite SMTP anterior, mesmo que esteja marcado RETENTAR', async () => {
+    registros.push({
+      id: 'existente',
+      feriadoId,
+      dataFeriado: new Date('2026-11-02T00:00:00Z'),
+      gestorId,
+      destinatario: gestor.email,
+      status: 'RETENTAR',
+      enviadoEm: new Date(),
+    });
+    await service.verificarFeriadosParaNotificar(agora);
+    expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
+  });
+  it('bloqueia nova tentativa quando o SMTP não informa aceite nem rejeição', async () => {
+    email.enviarEmCopiaOculta.mockResolvedValueOnce({
+      aceitos: [],
+      rejeitados: [],
+    });
+    await service.verificarFeriadosParaNotificar(agora);
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-29T11:00:00Z'),
+    );
+    expect(registros[0].status).toBe('INCERTO');
+    expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
+  });
+  it('não tenta no feriado após falhar na última oportunidade', async () => {
+    email.enviarEmCopiaOculta.mockRejectedValueOnce({ code: 'ECONNREFUSED' });
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-30T11:00:00Z'),
+    );
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-11-02T11:00:00Z'),
+    );
+    expect(registros[0].status).toBe('RETENTAR');
+    expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
+  });
+  it('usa o e-mail corrigido no AD para repetir uma tentativa comprovadamente não entregue', async () => {
+    email.enviarEmCopiaOculta.mockRejectedValueOnce({
+      code: 'EENVELOPE',
+      command: 'RCPT TO',
+      responseCode: 550,
+    });
+    await service.verificarFeriadosParaNotificar(agora);
+    (axios.get as jest.Mock).mockResolvedValue({
+      data: [{ ...gestor, email: 'corrigido@example.com' }],
+    });
+    await service.verificarFeriadosParaNotificar(
+      new Date('2026-10-29T11:00:00Z'),
+    );
+    expect(email.enviarEmCopiaOculta.mock.calls[1][0]).toEqual([
+      'corrigido@example.com',
+    ]);
+    expect(registros[0].destinatario).toBe('corrigido@example.com');
+    expect(registros[0].status).toBe('ENVIADO');
   });
 });
