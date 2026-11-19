@@ -13,7 +13,7 @@ O `FeriadosNotificacoesService` funciona automaticamente pelo Cron, sem variáve
 
 ## Destinatários e CCO
 
-Consulta o backend AD por `GET /gestores/destinatarios-feriados?feriadoId=...` usando `AUTH_API_URL` e um JWT de curta duração. O `JWT_SECRET` do backend-pizzatto deve corresponder à chave de verificação dos tokens no AD.
+Consulta diretamente pelo Prisma a tabela `Gestores` no PostgreSQL compartilhado, com as mesmas regras de `/gestores/destinatarios-feriados`. O backend AD continua responsável pela sincronização dos gestores e pela edição da permissão de recebimento. A consulta dos destinatários não depende de chamada HTTP, `AUTH_API_URL` ou JWT.
 
 Somente gestores ativos, com recebimento habilitado, e-mail válido e filial correspondente recebem. Cada grupo pendente é enviado em uma única mensagem com os gestores em CCO, preservando seus endereços. O histórico continua individual na tabela `FeriadoNotificacaoEnvio`.
 
@@ -27,7 +27,7 @@ Reservas e novas tentativas usam uma transação e uma trava por ocorrência. Re
 - `PROCESSANDO`: reserva ativa ou interrompida. Não repete automaticamente, pois pode ter ocorrido envio antes de uma queda.
 - `FALHA` legado: registros antigos não distinguem rejeição de entrega incerta. Permanecem bloqueados até conferência; não são convertidos automaticamente para `RETENTAR`.
 
-Se parte do grupo for aceita e parte rejeitada, somente os rejeitados são tentados novamente. Falhas de consulta ao AD ou de configuração antes da reserva não criam registros e são recuperadas no próximo intervalo útil.
+Se parte do grupo for aceita e parte rejeitada, somente os rejeitados são tentados novamente. Falhas de consulta ao PostgreSQL ou de configuração antes da reserva não criam registros e são recuperadas no próximo intervalo útil.
 
 Uma tentativa comprovadamente não entregue pode usar o e-mail atual corrigido no AD, atualizando o registro existente. Correspondências ambíguas entre múltiplos registros são mantidas para conferência, sem envio automático.
 
@@ -35,8 +35,8 @@ Uma tentativa comprovadamente não entregue pode usar o e-mail atual corrigido n
 
 O Cron é registrado pelo `FeriadosModule` e pelo `ScheduleModule` do aplicativo. Não é necessário criar chave de ativação no `.env`.
 
-Permanecem necessárias as configurações normais de conexão ao banco, `AUTH_API_URL`, `JWT_SECRET` e `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `SMTP_FROM`. Para comunicados que abrangem Costeira, `FERIADOS_EMAIL_GRH` informa o endereço completo do GRH usado no corpo da mensagem. Os dados de conexão e o endereço do GRH não são controles de ativação.
+Permanecem necessárias as configurações normais de conexão ao banco compartilhado e `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `SMTP_FROM`. Para comunicados que abrangem Costeira, `FERIADOS_EMAIL_GRH` informa o endereço completo do GRH usado no corpo da mensagem. Os dados de conexão e o endereço do GRH não são controles de ativação.
 
 ## Validação
 
-Execute `npm test -- --runInBand feriadosNotificacoes email-retry email.service` e `npm run build` no backend-pizzatto. Os testes simulam AD, SMTP e persistência, sem disparos reais.
+Execute `npm test -- --runInBand feriadosNotificacoes email-retry email.service` e `npm run build` no backend-pizzatto. Os testes simulam as consultas Prisma, SMTP e persistência, sem disparos reais.

@@ -4,9 +4,6 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import axios from 'axios';
-import { sign } from 'jsonwebtoken';
-import { isUUID } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { podeRepetirEnvio } from '../email/email-retry';
@@ -39,43 +36,24 @@ export class FeriadosNotificacoesService {
   private async buscarDestinatarios(
     feriado: FeriadoNotificavel,
   ): Promise<Destinatario[]> {
-    const baseUrl = process.env.AUTH_API_URL?.replace(/\/$/, '');
-    const secret = process.env.JWT_SECRET;
-    if (!baseUrl || !secret)
-      throw new ServiceUnavailableException(
-        'Configure AUTH_API_URL e JWT_SECRET para consultar os destinatários no backend AD.',
-      );
+    if (!feriado.filiais.length) return [];
     try {
-      const token = sign(
-        {
-          sub: 'notificacoes-feriados',
-          type: 'service',
-          scope: 'feriados:destinatarios',
+      // A sincronização do AD já persiste os gestores neste mesmo PostgreSQL.
+      const gestores = await this.prisma.gestores.findMany({
+        where: {
+          ativo: true,
+          recebeEmail: 'SIM',
+          email: { not: null },
+          filial: { not: null },
         },
-        secret,
-        { expiresIn: '2m', algorithm: 'HS256' },
-      );
-      const { data } = await axios.get(
-        `${baseUrl}/gestores/destinatarios-feriados`,
-        {
-          params: { feriadoId: feriado.id },
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 30000,
-          maxRedirects: 0,
-        },
-      );
-      if (!Array.isArray(data)) throw new Error('Resposta inválida');
+        select: { id: true, nome: true, email: true, filial: true },
+        orderBy: { nome: 'asc' },
+      });
       const filiais = new Set(feriado.filiais.map(filialChave));
       const emails = new Set<string>();
-      return data
+      return gestores
         .filter((gestor): gestor is Destinatario => {
-          if (
-            !gestor ||
-            !isUUID(gestor.id) ||
-            typeof gestor.email !== 'string' ||
-            typeof gestor.filial !== 'string'
-          )
-            return false;
+          if (!gestor.email || !gestor.filial) return false;
           const email = gestor.email.trim().toLowerCase();
           if (
             !emailValido(email) ||
@@ -90,10 +68,27 @@ export class FeriadosNotificacoesService {
           ...gestor,
           email: gestor.email.trim().toLowerCase(),
         }));
-    } catch {
-      // Não registrar objetos Axios: eles podem conter o token de autenticação.
+    } catch (error) {
+      // Não inclui erros brutos: podem expor a conexão ou dados dos gestores.
+      const motivos: Record<string, string> = {
+        P2021:
+          'tabela Gestores não encontrada; confira as migrations no banco compartilhado',
+        P2022:
+          'coluna de Gestores não encontrada; confira o schema e o Prisma Client',
+        P1001: 'PostgreSQL indisponível',
+        P1002: 'tempo limite de conexão com o PostgreSQL excedido',
+        P2024: 'tempo limite para obter conexão do pool excedido',
+      };
+      const code = (error as { code?: unknown } | null)?.code;
+      const motivo =
+        typeof code === 'string' &&
+        Object.prototype.hasOwnProperty.call(motivos, code)
+          ? code + ': ' + motivos[code]
+          : 'erro de consulta à tabela Gestores';
       throw new ServiceUnavailableException(
-        'Falha ao consultar os destinatários no backend AD. Nenhum envio realizado nesta consulta.',
+        'Falha ao consultar os destinatários no PostgreSQL. ' +
+          motivo +
+          '. Nenhum envio realizado nesta consulta.',
       );
     }
   }

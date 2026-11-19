@@ -1,8 +1,5 @@
 jest.mock('../prisma/prisma.service', () => ({ PrismaService: class {} }));
 jest.mock('../email/email.service', () => ({ EmailService: class {} }));
-jest.mock('jsonwebtoken', () => ({ sign: jest.fn(() => 'service-token') }));
-jest.mock('axios', () => ({ __esModule: true, default: { get: jest.fn() } }));
-import axios from 'axios';
 import { Logger } from '@nestjs/common';
 import { FeriadosNotificacoesService } from './feriadosNotificacoes.service';
 
@@ -27,13 +24,12 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
     process.env = {
       ...ambiente,
       FERIADOS_EMAIL_GRH: 'grh@example.com',
-      AUTH_API_URL: 'https://ad.example.com',
-      JWT_SECRET: 'segredo-teste',
     };
     const chaves = new Set();
     const identidades = new Set();
     registros = [];
     prisma = {
+      gestores: { findMany: jest.fn().mockResolvedValue([gestor]) },
       feriado: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -103,22 +99,26 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
     service = new FeriadosNotificacoesService(prisma, email);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-    (axios.get as jest.Mock).mockResolvedValue({ data: [gestor] });
   });
   afterEach(() => {
     process.env = ambiente;
     jest.restoreAllMocks();
   });
 
-  it('consulta os destinatários do feriado no AD com autenticação e envia mensagem em CCO', async () => {
+  it('consulta os destinatários pelo Prisma sem URL ou token do AD e envia em CCO', async () => {
+    delete process.env.AUTH_API_URL;
+    delete process.env.JWT_SECRET;
     await service.verificarFeriadosParaNotificar(agora);
-    expect(axios.get).toHaveBeenCalledWith(
-      'https://ad.example.com/gestores/destinatarios-feriados',
-      expect.objectContaining({
-        params: { feriadoId },
-        headers: { Authorization: 'Bearer service-token' },
-      }),
-    );
+    expect(prisma.gestores.findMany).toHaveBeenCalledWith({
+      where: {
+        ativo: true,
+        recebeEmail: 'SIM',
+        email: { not: null },
+        filial: { not: null },
+      },
+      select: { id: true, nome: true, email: true, filial: true },
+      orderBy: { nome: 'asc' },
+    });
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledWith(
       [gestor.email],
       expect.objectContaining({
@@ -156,28 +156,46 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
     await service.verificarFeriadosParaNotificar(agora);
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
   });
-  it('não presume destinatários se o AD falhar ou não retornar gestores', async () => {
-    (axios.get as jest.Mock)
+  it('não presume destinatários se o banco falhar ou não retornar gestores', async () => {
+    prisma.gestores.findMany
       .mockRejectedValueOnce(new Error('AD indisponível'))
-      .mockResolvedValueOnce({ data: [] });
+      .mockResolvedValueOnce([]);
     await service.verificarFeriadosParaNotificar(agora);
     await service.verificarFeriadosParaNotificar(agora);
     expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
     expect(prisma.feriadoNotificacaoEnvio.create).not.toHaveBeenCalled();
   });
   it('revalida as filiais, ignora endereços inválidos e deduplica a resposta', async () => {
-    (axios.get as jest.Mock).mockResolvedValue({
-      data: [
-        gestor,
-        { ...gestor, email: 'GESTOR@example.com' },
-        { ...gestor, email: 'fora@example.com', filial: 'Matriz' },
-        { ...gestor, email: 'invalido' },
-      ],
-    });
+    prisma.gestores.findMany.mockResolvedValue([
+      gestor,
+      { ...gestor, email: 'GESTOR@example.com' },
+      { ...gestor, email: 'fora@example.com', filial: 'Matriz' },
+      { ...gestor, email: 'invalido' },
+      { ...gestor, email: null },
+      { ...gestor, filial: null },
+      { ...gestor, filial: '   ' },
+    ]);
     await service.verificarFeriadosParaNotificar(agora);
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
     expect(email.enviarEmCopiaOculta.mock.calls[0][0]).toEqual([gestor.email]);
   });
+  it.each(['P2021', 'P2022', 'P1001', 'P1002', 'P2024'])(
+    'registra o diagnóstico %s sem expor o erro bruto e não reserva envios',
+    async (code) => {
+      prisma.gestores.findMany.mockRejectedValue({
+        code,
+        message: 'conexao-confidencial',
+      });
+      await service.verificarFeriadosParaNotificar(agora);
+      const logs = (Logger.prototype.error as jest.Mock).mock.calls
+        .flat()
+        .join(' ');
+      expect(logs).toContain(code);
+      expect(logs).not.toContain('conexao-confidencial');
+      expect(email.enviarEmCopiaOculta).not.toHaveBeenCalled();
+      expect(prisma.feriadoNotificacaoEnvio.create).not.toHaveBeenCalled();
+    },
+  );
   it('registra falha SMTP e não repete uma entrega incerta', async () => {
     email.enviarEmCopiaOculta.mockRejectedValue(new Error('Timeout SMTP'));
     await service.verificarFeriadosParaNotificar(agora);
@@ -202,13 +220,13 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
   });
   it('não repete ao mudar de conta com o mesmo e-mail ou ao mudar e-mail do mesmo gestor', async () => {
     await service.verificarFeriadosParaNotificar(agora);
-    (axios.get as jest.Mock).mockResolvedValueOnce({
-      data: [{ ...gestor, id: '4ae12ef3-8cff-4d10-8879-55db44917b62' }],
-    });
+    prisma.gestores.findMany.mockResolvedValueOnce([
+      { ...gestor, id: '4ae12ef3-8cff-4d10-8879-55db44917b62' },
+    ]);
     await service.verificarFeriadosParaNotificar(agora);
-    (axios.get as jest.Mock).mockResolvedValueOnce({
-      data: [{ ...gestor, email: 'novo@example.com' }],
-    });
+    prisma.gestores.findMany.mockResolvedValueOnce([
+      { ...gestor, email: 'novo@example.com' },
+    ]);
     await service.verificarFeriadosParaNotificar(agora);
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
   });
@@ -226,7 +244,7 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       id: '4ae12ef3-8cff-4d10-8879-55db44917b62',
       email: 'outro@example.com',
     };
-    (axios.get as jest.Mock).mockResolvedValue({ data: [gestor, outro] });
+    prisma.gestores.findMany.mockResolvedValue([gestor, outro]);
     await service.verificarFeriadosParaNotificar(agora);
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
     expect(email.enviarEmCopiaOculta).toHaveBeenCalledWith(
@@ -246,7 +264,7 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       id: '4ae12ef3-8cff-4d10-8879-55db44917b62',
       email: 'outro@example.com',
     };
-    (axios.get as jest.Mock).mockResolvedValue({ data: [gestor, outro] });
+    prisma.gestores.findMany.mockResolvedValue([gestor, outro]);
     email.enviarEmCopiaOculta.mockResolvedValueOnce({
       aceitos: [gestor.email],
       rejeitados: [outro.email],
@@ -275,7 +293,7 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       id: '4ae12ef3-8cff-4d10-8879-55db44917b62',
       email: 'outro@example.com',
     };
-    (axios.get as jest.Mock).mockResolvedValue({ data: [gestor, outro] });
+    prisma.gestores.findMany.mockResolvedValue([gestor, outro]);
     prisma.feriadoNotificacaoEnvio.create
       .mockResolvedValueOnce({ id: 'envio-1' })
       .mockRejectedValueOnce(new Error('Falha na reserva'));
@@ -306,8 +324,8 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       expect(email.enviarEmCopiaOculta).toHaveBeenCalledTimes(1);
     },
   );
-  it('recupera indisponibilidade do AD no último dia útil sem repetir quem recebeu', async () => {
-    (axios.get as jest.Mock)
+  it('recupera indisponibilidade do banco no último dia útil sem repetir quem recebeu', async () => {
+    prisma.gestores.findMany
       .mockRejectedValueOnce(new Error('AD indisponível'))
       .mockRejectedValueOnce(new Error('AD indisponível'));
     await service.verificarFeriadosParaNotificar(agora);
@@ -399,9 +417,9 @@ describe('Disparo automático de feriados (sem e-mails reais)', () => {
       responseCode: 550,
     });
     await service.verificarFeriadosParaNotificar(agora);
-    (axios.get as jest.Mock).mockResolvedValue({
-      data: [{ ...gestor, email: 'corrigido@example.com' }],
-    });
+    prisma.gestores.findMany.mockResolvedValue([
+      { ...gestor, email: 'corrigido@example.com' },
+    ]);
     await service.verificarFeriadosParaNotificar(
       new Date('2026-10-29T11:00:00Z'),
     );
