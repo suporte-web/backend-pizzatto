@@ -388,6 +388,7 @@ export class SolicitacaoFeriasService {
     const tiposVisualizacaoPermitidos = [
       'MINHAS_SOLICITACOES',
       'PARA_APROVAR',
+      'MINHA_EQUIPE',
       'TODAS',
     ];
 
@@ -412,12 +413,20 @@ export class SolicitacaoFeriasService {
       });
     }
 
-    if (tipoVisualizacao === 'PARA_APROVAR') {
+    if (
+      tipoVisualizacao === 'PARA_APROVAR' ||
+      tipoVisualizacao === 'MINHA_EQUIPE'
+    ) {
       where.AND.push({
         gestorUsuario: {
           equals: usuarioAd,
           mode: 'insensitive',
         },
+      });
+    }
+
+    if (tipoVisualizacao === 'PARA_APROVAR') {
+      where.AND.push({
         status: {
           in: ['AGUARDANDO_APROVACAO', 'APROVADO_PARCIALMENTE'],
         },
